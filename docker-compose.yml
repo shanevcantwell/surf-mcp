@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  navigator-mcp:
+    build: .
+    stdin_open: true
+    tty: true
+    environment:
+      # LLM Configuration
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_API_BASE=${OPENAI_API_BASE:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - NAVIGATOR_LLM_PROVIDER=${NAVIGATOR_LLM_PROVIDER:-openai}
+      - NAVIGATOR_LLM_MODEL=${NAVIGATOR_LLM_MODEL:-gpt-4o}
+
+      # Browser Configuration
+      - NAVIGATOR_BROWSER_HEADLESS=true
+      - NAVIGATOR_BROWSER_VIEWPORT_WIDTH=1920
+      - NAVIGATOR_BROWSER_VIEWPORT_HEIGHT=1080
+
+      # Session Configuration
+      - NAVIGATOR_MAX_SESSIONS=10
+      - NAVIGATOR_SESSION_TIMEOUT_SECONDS=3600
+
+      # Filesystem Configuration
+      - NAVIGATOR_FS_SANDBOX=true
+
+    volumes:
+      # Mount workspace for filesystem operations
+      - ./workspace:/workspace
+
+    # For debugging, you can add:
+    # ports:
+    #   - "8080:8080"
