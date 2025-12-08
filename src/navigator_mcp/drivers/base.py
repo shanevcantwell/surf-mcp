@@ -15,8 +15,13 @@ All drivers implement:
 """
 
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+
+def _utc_now() -> datetime:
+    """Return current UTC time (timezone-aware)."""
+    return datetime.now(timezone.utc)
 
 from pydantic import BaseModel, Field
 
@@ -37,7 +42,7 @@ class HistoryEntry(BaseModel):
 
     location: str = Field(..., description="Location that was navigated to")
     timestamp: datetime = Field(
-        default_factory=datetime.utcnow, description="When this navigation occurred"
+        default_factory=_utc_now, description="When this navigation occurred"
     )
     action: str = Field(..., description="Action type: goto, back, forward")
 
@@ -150,7 +155,7 @@ class NavigatorDriver(ABC):
         self.history.append(
             HistoryEntry(
                 location=location,
-                timestamp=datetime.utcnow(),
+                timestamp=_utc_now(),
                 action=action,
             )
         )

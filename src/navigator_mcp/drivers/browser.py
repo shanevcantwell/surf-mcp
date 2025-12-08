@@ -6,14 +6,24 @@ Provides:
 - Screenshot capture
 - Visual grounding for element location (via Fara/LLM)
 - Click, type, scroll operations using natural language descriptions
+
+Security Controls (ADR-001 Phase 1):
+- URL Allowlist/Blocklist
+- Audit Logging
+- Rate Limiting
 """
 
 import base64
 import logging
+import os
+import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from .base import HistoryEntry, NavigatorDriver, NavigatorState
+from ..security.audit import AuditEvent, AuditLogger
+from ..security.domain_filter import DomainFilter
+from ..security.rate_limiter import RateLimiter
 
 if TYPE_CHECKING:
     from playwright.async_api import Browser, Page, Playwright
@@ -28,6 +38,11 @@ class BrowserDriver(NavigatorDriver):
 
     Uses Playwright for browser automation and multimodal LLMs
     (via VisualGrounder) for natural language element location.
+
+    Security Controls:
+    - URL allowlist/blocklist for domain access control
+    - Audit logging for all actions
+    - Rate limiting to prevent runaway automation
     """
 
     driver_type = "browser"
@@ -37,6 +52,10 @@ class BrowserDriver(NavigatorDriver):
         headless: bool = True,
         viewport: tuple = (1920, 1080),
         visual_grounder: Optional["VisualGrounder"] = None,
+        # Security controls (ADR-001 Phase 1)
+        allowed_domains: Optional[List[str]] = None,
+        blocked_domains: Optional[List[str]] = None,
+        max_actions_per_minute: int = 30,
     ):
         """
         Initialize browser driver.
@@ -45,10 +64,14 @@ class BrowserDriver(NavigatorDriver):
             headless: Run browser without visible window
             viewport: Browser viewport size (width, height)
             visual_grounder: LLM-based visual grounding implementation
+            allowed_domains: If set, only these domains allowed (allowlist mode)
+            blocked_domains: Domains to always block (added to defaults)
+            max_actions_per_minute: Rate limit for click/type/scroll actions
         """
         self.headless = headless
         self.viewport = viewport
         self.grounder = visual_grounder
+        self.max_actions_per_minute = max_actions_per_minute
 
         self._playwright: Optional["Playwright"] = None
         self._browser: Optional["Browser"] = None
@@ -60,11 +83,27 @@ class BrowserDriver(NavigatorDriver):
         # Tracking for session summary
         self.screenshots: List[str] = []
 
+        # Security controls (ADR-001 Phase 1)
+        self._session_id = str(uuid.uuid4())[:8]
+        self._audit_logger = AuditLogger(session_id=self._session_id)
+        self._domain_filter = DomainFilter(
+            allowed_domains=allowed_domains,
+            blocked_domains=blocked_domains,
+        )
+        self.rate_limiter = RateLimiter(max_per_minute=max_actions_per_minute)
+        self._last_screenshot_b64: Optional[str] = None
+
+    @property
+    def audit_log(self) -> List[AuditEvent]:
+        """Return audit log events (read-only view)."""
+        return self._audit_logger.get_events()
+
     async def initialize(self) -> None:
         """
         Start browser (call once per session).
 
         Must be called before any navigation operations.
+        Automatically configures proxy if HTTPS_PROXY env var is set.
         """
         try:
             from playwright.async_api import async_playwright
@@ -76,19 +115,30 @@ class BrowserDriver(NavigatorDriver):
 
         self._playwright = await async_playwright().start()
         self._browser = await self._playwright.chromium.launch(headless=self.headless)
-        context = await self._browser.new_context(
-            viewport={"width": self.viewport[0], "height": self.viewport[1]}
-        )
+
+        # Configure context with optional proxy (for Squid integration per ADR-001)
+        context_options: Dict[str, Any] = {
+            "viewport": {"width": self.viewport[0], "height": self.viewport[1]}
+        }
+
+        proxy_url = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY")
+        if proxy_url:
+            context_options["proxy"] = {"server": proxy_url}
+            logger.info(f"BrowserDriver using proxy: {proxy_url}")
+
+        context = await self._browser.new_context(**context_options)
         self._page = await context.new_page()
 
         logger.info(
             f"BrowserDriver initialized: headless={self.headless}, "
-            f"viewport={self.viewport}"
+            f"viewport={self.viewport}, session_id={self._session_id}"
         )
 
     async def goto(self, location: str) -> NavigatorState:
         """
         Navigate to URL.
+
+        Security: Checks domain allowlist/blocklist before navigation.
 
         Args:
             location: URL to navigate to
@@ -103,6 +153,20 @@ class BrowserDriver(NavigatorDriver):
                 error="Browser not initialized. Call initialize() first.",
             )
 
+        # Security check: Domain filter (ADR-001 Phase 1)
+        allowed, reason = self._domain_filter.check(location)
+        if not allowed:
+            self._audit_logger.log(
+                action="goto",
+                details={"url": location, "reason": reason},
+                outcome="blocked",
+            )
+            return NavigatorState(
+                location=await self.current() if self._page else "",
+                success=False,
+                error=reason,
+            )
+
         try:
             await self._page.goto(
                 location, wait_until="networkidle", timeout=30000
@@ -111,6 +175,13 @@ class BrowserDriver(NavigatorDriver):
 
             screenshot = await self.snapshot()
 
+            # Audit log successful navigation
+            self._audit_logger.log(
+                action="goto",
+                details={"url": location},
+                outcome="success",
+            )
+
             return NavigatorState(
                 location=self._page.url,
                 success=True,
@@ -118,6 +189,11 @@ class BrowserDriver(NavigatorDriver):
             )
         except Exception as e:
             logger.error(f"Navigation failed: {e}")
+            self._audit_logger.log(
+                action="goto",
+                details={"url": location, "error": str(e)},
+                outcome="failed",
+            )
             return NavigatorState(
                 location=self._page.url if self._page else "",
                 success=False,
@@ -234,6 +310,8 @@ class BrowserDriver(NavigatorDriver):
             screenshot_bytes = await self._page.screenshot()
             b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
             self.screenshots.append(b64)
+            # Track last screenshot for audit logging
+            self._last_screenshot_b64 = b64
             return b64
         except Exception as e:
             logger.error(f"Screenshot failed: {e}")
@@ -263,6 +341,8 @@ class BrowserDriver(NavigatorDriver):
         """
         Click element by visual description.
 
+        Security: Rate limited and audit logged.
+
         Args:
             description: Natural language description of element to click
 
@@ -276,9 +356,28 @@ class BrowserDriver(NavigatorDriver):
                 error="Browser not initialized",
             )
 
+        # Security check: Rate limiting (ADR-001 Phase 1)
+        if not self.rate_limiter.allow():
+            self._audit_logger.log(
+                action="click",
+                details={"description": description},
+                outcome="rate_limited",
+            )
+            return NavigatorState(
+                location=self._page.url,
+                success=False,
+                error="Rate limit exceeded. Too many actions per minute.",
+            )
+
         locate_result = await self.locate(description)
 
         if not locate_result.get("found"):
+            self._audit_logger.log(
+                action="click",
+                details={"description": description},
+                outcome="failed",
+                llm_response=locate_result,
+            )
             return NavigatorState(
                 location=self._page.url,
                 success=False,
@@ -286,6 +385,15 @@ class BrowserDriver(NavigatorDriver):
             )
 
         x, y = locate_result["x"], locate_result["y"]
+
+        # Audit log with full context
+        self._audit_logger.log(
+            action="click",
+            details={"description": description, "coordinates": (x, y)},
+            outcome="success",
+            screenshot_b64=self._last_screenshot_b64,
+            llm_response=locate_result,
+        )
 
         try:
             await self._page.mouse.click(x, y)
@@ -306,6 +414,8 @@ class BrowserDriver(NavigatorDriver):
         """
         Type into element by visual description.
 
+        Security: Rate limited and audit logged.
+
         Args:
             description: Natural language description of input element
             text: Text to type
@@ -321,9 +431,28 @@ class BrowserDriver(NavigatorDriver):
                 error="Browser not initialized",
             )
 
+        # Security check: Rate limiting (ADR-001 Phase 1)
+        if not self.rate_limiter.allow():
+            self._audit_logger.log(
+                action="type",
+                details={"description": description, "text_length": len(text)},
+                outcome="rate_limited",
+            )
+            return NavigatorState(
+                location=self._page.url,
+                success=False,
+                error="Rate limit exceeded. Too many actions per minute.",
+            )
+
         locate_result = await self.locate(description)
 
         if not locate_result.get("found"):
+            self._audit_logger.log(
+                action="type",
+                details={"description": description},
+                outcome="failed",
+                llm_response=locate_result,
+            )
             return NavigatorState(
                 location=self._page.url,
                 success=False,
@@ -331,6 +460,19 @@ class BrowserDriver(NavigatorDriver):
             )
 
         x, y = locate_result["x"], locate_result["y"]
+
+        # Audit log (redact actual text for security)
+        self._audit_logger.log(
+            action="type",
+            details={
+                "description": description,
+                "coordinates": (x, y),
+                "text_length": len(text),
+            },
+            outcome="success",
+            screenshot_b64=self._last_screenshot_b64,
+            llm_response=locate_result,
+        )
 
         try:
             await self._page.mouse.click(x, y)
@@ -358,6 +500,8 @@ class BrowserDriver(NavigatorDriver):
         """
         Scroll page.
 
+        Security: Rate limited and audit logged.
+
         Args:
             direction: "up" or "down"
             amount: Pixels to scroll (default: viewport height)
@@ -372,10 +516,30 @@ class BrowserDriver(NavigatorDriver):
                 error="Browser not initialized",
             )
 
+        # Security check: Rate limiting (ADR-001 Phase 1)
+        if not self.rate_limiter.allow():
+            self._audit_logger.log(
+                action="scroll",
+                details={"direction": direction},
+                outcome="rate_limited",
+            )
+            return NavigatorState(
+                location=self._page.url,
+                success=False,
+                error="Rate limit exceeded. Too many actions per minute.",
+            )
+
         if amount is None:
             amount = self.viewport[1]
 
         delta = amount if direction == "down" else -amount
+
+        # Audit log
+        self._audit_logger.log(
+            action="scroll",
+            details={"direction": direction, "amount": abs(delta)},
+            outcome="success",
+        )
 
         try:
             await self._page.mouse.wheel(0, delta)

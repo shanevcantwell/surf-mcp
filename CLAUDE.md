@@ -22,6 +22,32 @@ The browser driver uses multimodal LLMs (Fara-7B via LM Studio, or Gemini/GPT-4V
 
 ---
 
+## Installation & Running
+
+### Docker Compose (Recommended)
+The project is designed to run via Docker Compose, which provides:
+- Isolated container environment
+- Squid proxy for network-level domain whitelisting (security)
+- Consistent cross-platform execution
+
+```bash
+docker compose up
+```
+
+### Direct Installation (Development)
+Install from pyproject.toml:
+```bash
+pip install -e ".[dev]"
+playwright install chromium
+```
+
+Run the MCP server:
+```bash
+python -m navigator_mcp
+```
+
+---
+
 ## Development Directives
 
 ### Testing
