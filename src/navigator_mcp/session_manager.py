@@ -123,8 +123,8 @@ class SessionManager:
         async with self._lock:
             # Enforce max sessions
             if len(self._sessions) >= self.max_sessions:
-                # Try to cleanup oldest idle session
-                await self._cleanup_oldest_session()
+                # Try to cleanup oldest idle session (unlocked - we already hold lock)
+                await self._cleanup_oldest_session_unlocked()
 
                 if len(self._sessions) >= self.max_sessions:
                     raise ValueError(
@@ -235,14 +235,20 @@ class SessionManager:
         else:
             return await VisualGrounderFactory.create()
 
-    async def _cleanup_oldest_session(self) -> None:
-        """Remove oldest inactive session to make room."""
+    async def _cleanup_oldest_session_unlocked(self) -> None:
+        """Remove oldest inactive session to make room.
+
+        IMPORTANT: Caller must hold self._lock. This method does not acquire
+        the lock to avoid deadlock when called from create_session.
+        """
         if not self._sessions:
             return
 
         oldest = min(self._sessions.values(), key=lambda s: s.last_activity)
-        await self.destroy_session(oldest.session_id)
-        logger.info(f"Cleaned up oldest session {oldest.session_id}")
+        session = self._sessions.pop(oldest.session_id, None)
+        if session:
+            await session.cleanup()
+            logger.info(f"Cleaned up oldest session {oldest.session_id}")
 
     async def cleanup_all(self) -> None:
         """Cleanup all sessions (for shutdown)."""
