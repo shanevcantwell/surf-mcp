@@ -56,6 +56,8 @@ When you use `locate`, a red target appears on the screenshot:
 ---
 
 ```
-  Run:  streamlit run app.py
+  Run:  ./run.sh       (Linux/Mac - auto-installs deps)
+        run.bat        (Windows)
+
   Requires: LM Studio with Fara model loaded
 ```

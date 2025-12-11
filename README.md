@@ -65,8 +65,8 @@ Interactive UI for testing visual grounding:
 
 ```bash
 cd tools/fara-harness
-pip install -r requirements.txt
-streamlit run app.py
+./run.sh    # Linux/Mac - auto-installs dependencies
+run.bat     # Windows
 ```
 
 See [tools/fara-harness/CHEATSHEET.md](tools/fara-harness/CHEATSHEET.md) for command reference.
