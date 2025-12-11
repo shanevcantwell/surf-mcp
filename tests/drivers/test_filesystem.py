@@ -16,7 +16,9 @@ async def test_init(temp_workspace):
     assert driver.root == temp_workspace
     assert driver.cwd == temp_workspace
     assert driver.sandbox is True
-    assert driver.history == []
+    # History starts with initial location (enables back() after first goto)
+    assert len(driver.history) == 1
+    assert driver.history[0].action == "init"
 
 
 @pytest.mark.asyncio
@@ -28,7 +30,7 @@ async def test_goto(temp_workspace):
 
     assert result.success is True
     assert result.location == str(temp_workspace / "subdir")
-    assert len(driver.history) == 1
+    assert len(driver.history) == 2  # init + goto
 
 
 @pytest.mark.asyncio

@@ -51,6 +51,9 @@ class FileSystemDriver(NavigatorDriver):
         # Ensure root exists
         self.root.mkdir(parents=True, exist_ok=True)
 
+        # Add initial location to history so back() works after first goto()
+        self._add_history("init", str(self.root))
+
         logger.info(f"FileSystemDriver initialized: root={self.root}, sandbox={sandbox}")
 
     async def goto(self, location: str) -> NavigatorState:

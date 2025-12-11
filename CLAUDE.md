@@ -20,6 +20,21 @@ Sessions can contain multiple drivers (e.g., filesystem + browser), enabling cro
 ### Visual Grounding (Browser)
 The browser driver uses multimodal LLMs (Fara-7B via LM Studio, or Gemini/GPT-4V) to locate UI elements by natural language description instead of brittle CSS selectors.
 
+### Multi-Server LM Studio Support
+Supports multiple LM Studio instances across different GPUs/machines:
+- **Server Discovery**: Probes each server's `/v1/models` manifest
+- **Prefer Loaded**: Prioritizes servers with Fara already loaded in VRAM
+- **Fallback**: Sequential retry across servers on failure
+- **Multiple Model IDs**: Supports priority list of acceptable Fara model variants
+
+Configure in `.env`:
+```bash
+LMSTUDIO_SERVERS="rtx3090=http://localhost:1234/v1,rtx8000=http://192.168.137.2:1234/v1"
+FARA_MODEL_IDS="microsoft_fara-7b,fara-7b-gguf,gao-zijian/fara-7b"
+FARA_MAX_FAILURES=2
+FARA_PROBE_TIMEOUT=2.0
+```
+
 ---
 
 ## Installation & Running
