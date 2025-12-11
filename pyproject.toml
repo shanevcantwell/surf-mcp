@@ -1,6 +1,6 @@
 [project]
 name = "navigator-mcp"
-version = "0.1.0"
+version = "0.3.0"
 description = "Unified MCP server for persistent navigation across filesystem and browser"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -26,6 +26,9 @@ dev = [
     "pytest-asyncio>=0.21.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
+]
+harness = [
+    "streamlit>=1.30.0",
 ]
 
 [project.scripts]

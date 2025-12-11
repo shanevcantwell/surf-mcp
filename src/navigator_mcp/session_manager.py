@@ -48,7 +48,7 @@ class Session:
         Cleanup all drivers and return summary.
 
         Returns:
-            Summary dict with per-driver stats
+            Summary dict with per-driver stats and storage_state for browser drivers
         """
         summary = {}
         for alias, driver in self.drivers.items():
@@ -65,6 +65,15 @@ class Session:
                 driver_summary["locations_visited"] = [
                     h.location for h in driver.history
                 ]
+
+            # Capture storage_state BEFORE cleanup (browser drivers only)
+            if hasattr(driver, "get_storage_state"):
+                try:
+                    storage_state = await driver.get_storage_state()
+                    if storage_state:
+                        driver_summary["storage_state"] = storage_state
+                except Exception as e:
+                    logger.warning(f"Error getting storage_state for {alias}: {e}")
 
             summary[alias] = driver_summary
 
@@ -203,6 +212,7 @@ class SessionManager:
 
             headless = config.get("headless", True)
             viewport = config.get("viewport", (1920, 1080))
+            storage_state = config.get("storage_state")
 
             # Get visual grounder if configured
             grounder = None
@@ -213,6 +223,7 @@ class SessionManager:
                 headless=headless,
                 viewport=viewport,
                 visual_grounder=grounder,
+                storage_state=storage_state,
             )
             await driver.initialize()
             return driver

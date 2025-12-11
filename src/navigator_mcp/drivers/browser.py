@@ -52,6 +52,7 @@ class BrowserDriver(NavigatorDriver):
         headless: bool = True,
         viewport: tuple = (1920, 1080),
         visual_grounder: Optional["VisualGrounder"] = None,
+        storage_state: Optional[Dict[str, Any]] = None,
         # Security controls (ADR-001 Phase 1)
         allowed_domains: Optional[List[str]] = None,
         blocked_domains: Optional[List[str]] = None,
@@ -64,6 +65,7 @@ class BrowserDriver(NavigatorDriver):
             headless: Run browser without visible window
             viewport: Browser viewport size (width, height)
             visual_grounder: LLM-based visual grounding implementation
+            storage_state: Playwright storage state (cookies, localStorage) to restore
             allowed_domains: If set, only these domains allowed (allowlist mode)
             blocked_domains: Domains to always block (added to defaults)
             max_actions_per_minute: Rate limit for click/type/scroll actions
@@ -71,10 +73,12 @@ class BrowserDriver(NavigatorDriver):
         self.headless = headless
         self.viewport = viewport
         self.grounder = visual_grounder
+        self.storage_state = storage_state
         self.max_actions_per_minute = max_actions_per_minute
 
         self._playwright: Optional["Playwright"] = None
         self._browser: Optional["Browser"] = None
+        self._context: Optional[Any] = None  # BrowserContext for storage_state
         self._page: Optional["Page"] = None
 
         self.history: List[HistoryEntry] = []
@@ -126,8 +130,13 @@ class BrowserDriver(NavigatorDriver):
             context_options["proxy"] = {"server": proxy_url}
             logger.info(f"BrowserDriver using proxy: {proxy_url}")
 
-        context = await self._browser.new_context(**context_options)
-        self._page = await context.new_page()
+        # Load storage_state if provided (cookies, localStorage)
+        if self.storage_state:
+            context_options["storage_state"] = self.storage_state
+            logger.info("BrowserDriver loading storage_state")
+
+        self._context = await self._browser.new_context(**context_options)
+        self._page = await self._context.new_page()
 
         logger.info(
             f"BrowserDriver initialized: headless={self.headless}, "
@@ -603,6 +612,18 @@ class BrowserDriver(NavigatorDriver):
                 success=False,
                 error=str(e),
             )
+
+    async def get_storage_state(self) -> Optional[Dict[str, Any]]:
+        """
+        Get current storage state (cookies, localStorage).
+
+        Returns:
+            Playwright storage_state dict, or None if context not initialized
+        """
+        if not self._context:
+            return None
+
+        return await self._context.storage_state()
 
     async def cleanup(self) -> None:
         """Close browser and release resources."""

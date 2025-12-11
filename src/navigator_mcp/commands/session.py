@@ -52,6 +52,10 @@ def get_tools() -> List[Tool]:
                                     "items": {"type": "integer"},
                                     "description": "Viewport [width, height] (browser only)",
                                 },
+                                "storage_state": {
+                                    "type": "object",
+                                    "description": "Playwright storage state to restore (cookies, localStorage) (browser only)",
+                                },
                             },
                             "required": ["type"],
                         },
