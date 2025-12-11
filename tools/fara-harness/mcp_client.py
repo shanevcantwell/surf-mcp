@@ -8,6 +8,8 @@ via subprocess stdio.
 import asyncio
 import json
 import sys
+import threading
+import time
 from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -223,26 +225,35 @@ class SyncNavigatorClient:
     """
     Synchronous wrapper for Streamlit integration.
 
-    Streamlit runs in a sync context, so we need to bridge to async.
+    Uses a dedicated thread with its own event loop to avoid conflicts
+    with Streamlit's internal event loop.
     """
 
     def __init__(self):
         self._client = NavigatorMCPClient()
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._thread: Optional[threading.Thread] = None
+        self._start_loop()
 
-    def _get_loop(self) -> asyncio.AbstractEventLoop:
-        """Get or create event loop."""
-        try:
-            return asyncio.get_running_loop()
-        except RuntimeError:
-            if self._loop is None or self._loop.is_closed():
-                self._loop = asyncio.new_event_loop()
-            return self._loop
+    def _start_loop(self) -> None:
+        """Start a dedicated event loop in a background thread."""
+        def run_loop():
+            self._loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self._loop)
+            self._loop.run_forever()
+
+        self._thread = threading.Thread(target=run_loop, daemon=True)
+        self._thread.start()
+        # Wait for loop to be ready
+        while self._loop is None:
+            time.sleep(0.01)
 
     def _run(self, coro):
-        """Run async coroutine in sync context."""
-        loop = self._get_loop()
-        return loop.run_until_complete(coro)
+        """Run async coroutine in the dedicated thread's event loop."""
+        if self._loop is None:
+            raise RuntimeError("Event loop not started")
+        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
+        return future.result(timeout=60)  # 60 second timeout
 
     def connect(self, server_command: str = "navigator-mcp") -> None:
         self._run(self._client.connect(server_command))

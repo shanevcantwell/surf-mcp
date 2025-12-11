@@ -86,12 +86,13 @@ class TestNavigatorMCPClientUnit:
 class TestSyncNavigatorClient:
     """Unit tests for sync wrapper."""
 
-    def test_sync_wrapper_creates_loop(self):
-        """SyncNavigatorClient creates event loop."""
+    def test_sync_wrapper_creates_loop_in_thread(self):
+        """SyncNavigatorClient creates event loop in background thread."""
         client = SyncNavigatorClient()
-        loop = client._get_loop()
-        assert loop is not None
-        assert isinstance(loop, asyncio.AbstractEventLoop)
+        assert client._loop is not None
+        assert isinstance(client._loop, asyncio.AbstractEventLoop)
+        assert client._thread is not None
+        assert client._thread.is_alive()
 
 
 class TestStorageStateRoundTrip:
