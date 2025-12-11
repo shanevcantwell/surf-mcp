@@ -8,8 +8,6 @@ via subprocess stdio.
 import asyncio
 import json
 import sys
-import threading
-import time
 from contextlib import AsyncExitStack
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -225,35 +223,34 @@ class SyncNavigatorClient:
     """
     Synchronous wrapper for Streamlit integration.
 
-    Uses a dedicated thread with its own event loop to avoid conflicts
-    with Streamlit's internal event loop.
+    Uses nest_asyncio to allow running async code even when an event loop
+    is already running (as is the case with Streamlit).
     """
 
     def __init__(self):
         self._client = NavigatorMCPClient()
         self._loop: Optional[asyncio.AbstractEventLoop] = None
-        self._thread: Optional[threading.Thread] = None
-        self._start_loop()
+        self._setup_loop()
 
-    def _start_loop(self) -> None:
-        """Start a dedicated event loop in a background thread."""
-        def run_loop():
+    def _setup_loop(self) -> None:
+        """Setup event loop with nest_asyncio for reentrant execution."""
+        try:
+            import nest_asyncio
+            nest_asyncio.apply()
+        except ImportError:
+            pass  # Will fail later if needed
+
+        try:
+            self._loop = asyncio.get_event_loop()
+        except RuntimeError:
             self._loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self._loop)
-            self._loop.run_forever()
-
-        self._thread = threading.Thread(target=run_loop, daemon=True)
-        self._thread.start()
-        # Wait for loop to be ready
-        while self._loop is None:
-            time.sleep(0.01)
 
     def _run(self, coro):
-        """Run async coroutine in the dedicated thread's event loop."""
+        """Run async coroutine synchronously."""
         if self._loop is None:
-            raise RuntimeError("Event loop not started")
-        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
-        return future.result(timeout=60)  # 60 second timeout
+            self._setup_loop()
+        return self._loop.run_until_complete(coro)
 
     def connect(self, server_command: str = "navigator-mcp") -> None:
         self._run(self._client.connect(server_command))

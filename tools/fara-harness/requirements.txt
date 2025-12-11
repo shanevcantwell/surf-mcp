@@ -2,3 +2,4 @@
 streamlit>=1.30.0
 pillow>=10.0.0
 mcp>=1.0.0
+nest-asyncio>=1.5.0
