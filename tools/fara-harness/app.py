@@ -31,6 +31,15 @@ def format_error(error: str) -> str:
     if "Playwright browser not installed" in error or "Executable doesn't exist" in error:
         return "Playwright browser not installed. Run: `playwright install chromium`"
 
+    # Browser crashed or closed (often display/X11 issue in WSL)
+    if "browser has been closed" in error or "Target page, context" in error:
+        return (
+            "Browser closed unexpectedly. If running in WSL without a display:\n"
+            "1. Install an X server (VcXsrv, X410) on Windows\n"
+            "2. Set DISPLAY=:0 in your shell\n"
+            "3. Or run with headless=True in session_create"
+        )
+
     # MCP connection errors
     if "Connection refused" in error:
         return "Cannot connect to navigator-mcp server. Ensure it is running."
@@ -39,11 +48,13 @@ def format_error(error: str) -> str:
     if "playwright package required" in error.lower():
         return "Playwright not installed. Run: `pip install playwright && playwright install chromium`"
 
-    # Truncate long errors
-    if len(error) > 200:
-        return error[:200] + "..."
-
     return error
+
+
+def show_error(error: str) -> None:
+    """Display error in a scrollable container."""
+    formatted = format_error(error)
+    st.error(formatted)
 
 
 # ==================== Session State ====================
@@ -91,6 +102,13 @@ def main():
         st.header("Connection")
 
         if not st.session_state.connected:
+            # Headless toggle - useful for WSL without X11
+            headless = st.checkbox(
+                "Headless mode",
+                value=False,
+                help="Run browser without visible window (required in WSL without X server)",
+            )
+
             if st.button("Connect to Navigator MCP"):
                 try:
                     client = SyncNavigatorClient()
@@ -100,21 +118,22 @@ def main():
                     storage_state = load_storage_state()
 
                     result = client.session_create(
-                        headless=False,
+                        headless=headless,
                         storage_state=storage_state,
                     )
 
                     if "error" in result:
-                        st.error(format_error(result['error']))
+                        show_error(result['error'])
                     else:
                         st.session_state.client = client
                         st.session_state.session_id = result["session_id"]
                         st.session_state.connected = True
-                        add_to_history(f"✓ Connected: session={result['session_id']}")
+                        mode = "headless" if headless else "visible"
+                        add_to_history(f"✓ Connected ({mode}): session={result['session_id']}")
                         st.rerun()
 
                 except Exception as e:
-                    st.error(format_error(str(e)))
+                    show_error(str(e))
         else:
             st.success(f"Connected: {st.session_state.session_id}")
 
