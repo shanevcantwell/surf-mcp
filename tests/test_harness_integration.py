@@ -1,0 +1,398 @@
+"""
+Integration tests for Fara Test Harness components.
+
+Tests MCP client wrapper and storage_state round-trip.
+"""
+
+import asyncio
+import json
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+# Import from harness module
+sys.path.insert(0, str(Path(__file__).parent.parent / "tools" / "fara-harness"))
+from mcp_client import NavigatorMCPClient, SyncNavigatorClient
+
+
+class TestNavigatorMCPClientUnit:
+    """Unit tests for MCP client (mocked server)."""
+
+    @pytest.mark.asyncio
+    async def test_client_not_connected_raises(self):
+        """Calling tools without connect raises RuntimeError."""
+        client = NavigatorMCPClient()
+
+        with pytest.raises(RuntimeError, match="Not connected"):
+            await client.call_tool("session_list", {})
+
+    @pytest.mark.asyncio
+    async def test_call_tool_parses_json(self):
+        """call_tool parses JSON response correctly."""
+        client = NavigatorMCPClient()
+        client._connected = True
+
+        # Mock session
+        mock_content = MagicMock()
+        mock_content.text = '{"session_id": "test-123"}'
+
+        mock_result = MagicMock()
+        mock_result.content = [mock_content]
+
+        mock_session = AsyncMock()
+        mock_session.call_tool.return_value = mock_result
+        client.session = mock_session
+
+        result = await client.call_tool("session_create", {"drivers": {}})
+
+        assert result == {"session_id": "test-123"}
+        mock_session.call_tool.assert_called_once_with("session_create", {"drivers": {}})
+
+    @pytest.mark.asyncio
+    async def test_session_create_builds_driver_config(self):
+        """session_create builds correct driver config."""
+        client = NavigatorMCPClient()
+        client._connected = True
+
+        mock_content = MagicMock()
+        mock_content.text = '{"session_id": "abc"}'
+        mock_result = MagicMock()
+        mock_result.content = [mock_content]
+        mock_session = AsyncMock()
+        mock_session.call_tool.return_value = mock_result
+        client.session = mock_session
+
+        await client.session_create(
+            headless=True,
+            viewport=(1280, 720),
+            storage_state={"cookies": [], "origins": []},
+        )
+
+        call_args = mock_session.call_tool.call_args
+        assert call_args[0][0] == "session_create"
+
+        drivers = call_args[0][1]["drivers"]
+        assert "web" in drivers
+        assert drivers["web"]["type"] == "browser"
+        assert drivers["web"]["headless"] is True
+        assert drivers["web"]["viewport"] == [1280, 720]
+        assert drivers["web"]["storage_state"] == {"cookies": [], "origins": []}
+
+
+class TestSyncNavigatorClient:
+    """Unit tests for sync wrapper."""
+
+    def test_sync_wrapper_creates_loop(self):
+        """SyncNavigatorClient creates event loop."""
+        client = SyncNavigatorClient()
+        loop = client._get_loop()
+        assert loop is not None
+        assert isinstance(loop, asyncio.AbstractEventLoop)
+
+
+class TestStorageStateRoundTrip:
+    """Test storage_state serialization."""
+
+    def test_storage_state_json_roundtrip(self):
+        """Storage state survives JSON round-trip."""
+        state = {
+            "cookies": [
+                {
+                    "name": "session",
+                    "value": "abc123",
+                    "domain": ".example.com",
+                    "path": "/",
+                    "expires": 1700000000,
+                    "httpOnly": True,
+                    "secure": True,
+                    "sameSite": "Lax",
+                }
+            ],
+            "origins": [
+                {
+                    "origin": "https://example.com",
+                    "localStorage": [{"name": "token", "value": "xyz789"}],
+                }
+            ],
+        }
+
+        # Round-trip through JSON (as would happen in MCP)
+        serialized = json.dumps(state)
+        restored = json.loads(serialized)
+
+        assert restored == state
+        assert len(restored["cookies"]) == 1
+        assert restored["cookies"][0]["name"] == "session"
+
+
+class TestCommandParsing:
+    """Test command parsing logic from utils.py."""
+
+    def test_parse_locate(self):
+        """Parse locate command."""
+        from utils import parse_command
+
+        action, target, extra = parse_command('locate "the search button"')
+        assert action == "locate"
+        assert target == "the search button"
+        assert extra is None
+
+    def test_parse_click(self):
+        """Parse click command."""
+        from utils import parse_command
+
+        action, target, extra = parse_command('click "Sign in"')
+        assert action == "click"
+        assert target == "Sign in"
+        assert extra is None
+
+    def test_parse_type(self):
+        """Parse type command."""
+        from utils import parse_command
+
+        action, target, extra = parse_command('type "email field" user@example.com')
+        assert action == "type"
+        assert target == "email field"
+        assert extra == "user@example.com"
+
+    def test_parse_goto(self):
+        """Parse goto command."""
+        from utils import parse_command
+
+        action, target, extra = parse_command("goto https://google.com")
+        assert action == "goto"
+        assert target == "https://google.com"
+        assert extra is None
+
+    def test_parse_scroll(self):
+        """Parse scroll command."""
+        from utils import parse_command
+
+        action, target, extra = parse_command("scroll down")
+        assert action == "scroll"
+        assert target == "down"
+
+        action, target, extra = parse_command("scroll up")
+        assert action == "scroll"
+        assert target == "up"
+
+    def test_parse_default_locate(self):
+        """Unparseable command defaults to locate."""
+        from utils import parse_command
+
+        action, target, extra = parse_command("the blue button")
+        assert action == "locate"
+        assert target == "the blue button"
+
+
+class TestOverlayDrawing:
+    """Test screenshot overlay functions."""
+
+    def test_draw_overlay(self, mock_screenshot):
+        """draw_overlay adds marker to image."""
+        from PIL import Image
+
+        from utils import draw_overlay
+
+        # Create a larger test image
+        img = Image.new("RGB", (100, 100), color="white")
+
+        result = draw_overlay(img, x=50, y=50, confidence=0.95)
+
+        # Should return modified image
+        assert result is not img  # Copy was made
+        assert result.size == img.size
+
+    def test_draw_overlay_no_coords(self):
+        """draw_overlay returns original if no coords."""
+        from PIL import Image
+
+        from utils import draw_overlay
+
+        img = Image.new("RGB", (100, 100), color="white")
+        result = draw_overlay(img, x=None, y=None)
+
+        # Should return same image
+        assert result is img
+
+
+@pytest.mark.integration
+class TestMCPServerIntegration:
+    """Integration tests that start actual navigator-mcp server.
+
+    These tests are marked as integration and require:
+    - navigator-mcp to be installed
+    - Playwright chromium (for browser tests)
+
+    Run with: pytest -m integration
+    """
+
+    @pytest.fixture
+    def check_server_available(self):
+        """Check if navigator-mcp is available."""
+        try:
+            result = subprocess.run(
+                ["navigator-mcp", "--help"],
+                capture_output=True,
+                timeout=5,
+            )
+            return True
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            pytest.skip("navigator-mcp not available")
+
+    @pytest.mark.asyncio
+    async def test_client_connect_disconnect(self, check_server_available):
+        """Test basic connect/disconnect cycle."""
+        client = NavigatorMCPClient()
+
+        await client.connect()
+        assert client._connected is True
+
+        await client.disconnect()
+        assert client._connected is False
+
+    @pytest.mark.asyncio
+    async def test_session_list_empty(self, check_server_available):
+        """Test session_list on fresh server."""
+        client = NavigatorMCPClient()
+        await client.connect()
+
+        try:
+            result = await client.session_list()
+            assert "sessions" in result
+            assert isinstance(result["sessions"], list)
+        finally:
+            await client.disconnect()
+
+    @pytest.mark.asyncio
+    async def test_filesystem_session_roundtrip(
+        self, check_server_available, temp_workspace
+    ):
+        """Test creating filesystem session (no playwright needed)."""
+        client = NavigatorMCPClient()
+        await client.connect()
+
+        try:
+            # Create filesystem session directly via call_tool
+            result = await client.call_tool(
+                "session_create",
+                {
+                    "drivers": {
+                        "fs": {
+                            "type": "filesystem",
+                            "root": str(temp_workspace),
+                            "sandbox": True,
+                        }
+                    }
+                },
+            )
+
+            assert "session_id" in result
+            session_id = result["session_id"]
+
+            # List should show session
+            list_result = await client.session_list()
+            assert any(s["session_id"] == session_id for s in list_result["sessions"])
+
+            # Destroy session
+            destroy_result = await client.call_tool(
+                "session_destroy", {"session_id": session_id}
+            )
+            assert "success" in destroy_result or "summary" in destroy_result
+
+        finally:
+            await client.disconnect()
+
+
+@pytest.mark.integration
+@pytest.mark.browser
+class TestBrowserIntegration:
+    """Browser integration tests.
+
+    Requires playwright chromium to be installed.
+    Run with: pytest -m "integration and browser"
+    """
+
+    @pytest.fixture
+    def check_playwright_available(self):
+        """Check if playwright chromium is installed."""
+        try:
+            from playwright.sync_api import sync_playwright
+
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                browser.close()
+            return True
+        except Exception as e:
+            pytest.skip(f"Playwright chromium not available: {e}")
+
+    @pytest.mark.asyncio
+    async def test_browser_session_with_storage_state(
+        self, check_playwright_available
+    ):
+        """Test browser session with storage_state round-trip."""
+        client = NavigatorMCPClient()
+        await client.connect()
+
+        try:
+            # Create browser session with empty storage_state
+            initial_state = {"cookies": [], "origins": []}
+            result = await client.session_create(
+                headless=True,
+                storage_state=initial_state,
+            )
+
+            assert "session_id" in result
+            session_id = result["session_id"]
+
+            # Navigate to a page
+            goto_result = await client.goto(session_id, "https://example.com")
+            assert "error" not in goto_result
+
+            # Destroy and capture storage_state
+            destroy_result = await client.session_destroy(session_id)
+
+            # Storage state should be in summary
+            assert "summary" in destroy_result
+            assert "web" in destroy_result["summary"]
+
+            # May or may not have storage_state depending on page
+            web_summary = destroy_result["summary"]["web"]
+            if "storage_state" in web_summary:
+                state = web_summary["storage_state"]
+                assert "cookies" in state
+                assert "origins" in state
+
+        finally:
+            await client.disconnect()
+
+    @pytest.mark.asyncio
+    async def test_browser_snapshot(self, check_playwright_available):
+        """Test taking browser screenshot."""
+        client = NavigatorMCPClient()
+        await client.connect()
+
+        try:
+            result = await client.session_create(headless=True)
+            session_id = result["session_id"]
+
+            # Navigate
+            await client.goto(session_id, "https://example.com")
+
+            # Take snapshot
+            snapshot_result = await client.snapshot(session_id)
+
+            assert "snapshot" in snapshot_result
+            # Snapshot should be base64 encoded PNG
+            import base64
+
+            base64.b64decode(snapshot_result["snapshot"])  # Should not raise
+
+            await client.session_destroy(session_id)
+
+        finally:
+            await client.disconnect()

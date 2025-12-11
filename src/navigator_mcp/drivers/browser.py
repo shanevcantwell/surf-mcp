@@ -118,7 +118,16 @@ class BrowserDriver(NavigatorDriver):
             )
 
         self._playwright = await async_playwright().start()
-        self._browser = await self._playwright.chromium.launch(headless=self.headless)
+
+        try:
+            self._browser = await self._playwright.chromium.launch(headless=self.headless)
+        except Exception as e:
+            error_msg = str(e)
+            if "Executable doesn't exist" in error_msg:
+                raise RuntimeError(
+                    "Playwright browser not installed. Run: playwright install chromium"
+                ) from e
+            raise
 
         # Configure context with optional proxy (for Squid integration per ADR-001)
         context_options: Dict[str, Any] = {
