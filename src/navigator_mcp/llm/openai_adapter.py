@@ -4,24 +4,18 @@ OpenAI Visual Grounding Adapter.
 Uses OpenAI's vision models (GPT-4V, GPT-4o) or OpenAI-compatible endpoints
 (like LM Studio running Fara-7B) for visual grounding.
 
-Supports multi-server discovery:
-- Parses LMSTUDIO_SERVERS env var for server list
-- Probes each server's /v1/models for model state
-- Prefers servers with target model already loaded
-- Falls back through server list on failures
+This is a pure OpenAI-compatible adapter. For LM Studio server discovery,
+see lmstudio_discovery.py which handles probing servers and finding models.
 """
 
-import asyncio
 import base64
 import io
 import json
 import logging
 import os
 import re
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
-import httpx
 from PIL import Image
 
 from .base import LocateResult, VisualGrounder
@@ -36,152 +30,6 @@ DEFAULT_NATIVE_RESOLUTIONS = {
 }
 
 
-@dataclass
-class ServerInfo:
-    """Information about an LM Studio server."""
-
-    name: str
-    url: str
-    models: List[Dict[str, Any]] = None  # Cached manifest
-
-    def __post_init__(self):
-        if self.models is None:
-            self.models = []
-
-
-def parse_lmstudio_servers() -> Dict[str, str]:
-    """
-    Parse LMSTUDIO_SERVERS env var into name→URL mapping.
-
-    Format: "name1=url1,name2=url2" (uses = separator since URLs contain :)
-    Example: "rtx3090=http://localhost:1234/v1,rtx8000=http://192.168.137.2:1234/v1"
-
-    Returns:
-        Dict mapping server names to URLs
-    """
-    servers_str = os.getenv("LMSTUDIO_SERVERS", "")
-    if not servers_str:
-        # Fall back to single server from LMSTUDIO_BASE_URL or OPENAI_API_BASE
-        fallback = os.getenv("LMSTUDIO_BASE_URL") or os.getenv(
-            "OPENAI_API_BASE", "http://localhost:1234/v1"
-        )
-        return {"default": fallback}
-
-    server_map = {}
-    for entry in servers_str.split(","):
-        entry = entry.strip()
-        if "=" in entry:
-            name, url = entry.split("=", 1)
-            server_map[name.strip()] = url.strip()
-        else:
-            logger.warning(f"Invalid LMSTUDIO_SERVERS entry (missing '='): {entry}")
-
-    if server_map:
-        logger.debug(f"Parsed LMSTUDIO_SERVERS: {list(server_map.keys())}")
-
-    return server_map or {"default": "http://localhost:1234/v1"}
-
-
-def get_fara_model_ids() -> List[str]:
-    """
-    Get priority-ordered list of acceptable Fara model IDs.
-
-    Returns:
-        List of model IDs to search for
-    """
-    ids_str = os.getenv("FARA_MODEL_IDS", "microsoft_fara-7b")
-    return [id.strip() for id in ids_str.split(",") if id.strip()]
-
-
-async def probe_server_models(
-    server_url: str, timeout: float = 2.0
-) -> List[Dict[str, Any]]:
-    """
-    Probe server's /v1/models endpoint for available models.
-
-    Args:
-        server_url: Base URL of the server (e.g., http://localhost:1234/v1)
-        timeout: Request timeout in seconds
-
-    Returns:
-        List of model objects with id, state, type, etc.
-    """
-    # Ensure URL ends without trailing slash for consistent joining
-    base = server_url.rstrip("/")
-    models_url = f"{base}/models"
-
-    try:
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            response = await client.get(models_url)
-            response.raise_for_status()
-            data = response.json()
-            models = data.get("data", [])
-            logger.debug(f"Probed {server_url}: {len(models)} models")
-            return models
-    except httpx.TimeoutException:
-        logger.debug(f"Probe timeout for {server_url}")
-        return []
-    except Exception as e:
-        logger.debug(f"Probe failed for {server_url}: {e}")
-        return []
-
-
-async def find_fara_server(
-    servers: Dict[str, str] = None,
-    model_ids: List[str] = None,
-    probe_timeout: float = None,
-) -> Tuple[str, str]:
-    """
-    Find a server with a Fara model, preferring already-loaded models.
-
-    Args:
-        servers: Server name→URL mapping (defaults to LMSTUDIO_SERVERS)
-        model_ids: Acceptable model IDs (defaults to FARA_MODEL_IDS)
-        probe_timeout: Timeout for manifest probes (defaults to FARA_PROBE_TIMEOUT)
-
-    Returns:
-        Tuple of (server_url, model_id)
-    """
-    if servers is None:
-        servers = parse_lmstudio_servers()
-    if model_ids is None:
-        model_ids = get_fara_model_ids()
-    if probe_timeout is None:
-        probe_timeout = float(os.getenv("FARA_PROBE_TIMEOUT", "2.0"))
-
-    model_id_set = set(model_ids)
-
-    # Phase 1: Find server with model already LOADED
-    for name, url in servers.items():
-        models = await probe_server_models(url, timeout=probe_timeout)
-        for model in models:
-            model_id = model.get("id", "")
-            state = model.get("state", "")
-            if model_id in model_id_set and state == "loaded":
-                logger.info(f"Found loaded model '{model_id}' on server '{name}'")
-                return (url, model_id)
-
-    # Phase 2: Find server that HAS the model (not loaded yet)
-    # LM Studio will auto-load on first request
-    for name, url in servers.items():
-        models = await probe_server_models(url, timeout=probe_timeout)
-        for model in models:
-            model_id = model.get("id", "")
-            if model_id in model_id_set:
-                logger.info(
-                    f"Found model '{model_id}' on server '{name}' (not loaded, will auto-load)"
-                )
-                return (url, model_id)
-
-    # Phase 3: Fallback to first server, first model ID
-    first_url = list(servers.values())[0]
-    first_model = model_ids[0]
-    logger.warning(
-        f"No Fara model found on any server, falling back to {first_url} with {first_model}"
-    )
-    return (first_url, first_model)
-
-
 class OpenAIVisualGrounder(VisualGrounder):
     """
     Visual grounding using OpenAI-compatible vision API.
@@ -191,7 +39,10 @@ class OpenAIVisualGrounder(VisualGrounder):
     - LM Studio running Fara-7B (or other vision models)
     - Any OpenAI-compatible vision endpoint
 
-    Supports multi-server discovery via LMSTUDIO_SERVERS env var.
+    For automatic LM Studio server discovery, use:
+        from navigator_mcp.llm.lmstudio_discovery import discover_fara_server
+        url, model = await discover_fara_server()
+        grounder = OpenAIVisualGrounder(api_base=url, model=model)
     """
 
     def __init__(
@@ -200,59 +51,24 @@ class OpenAIVisualGrounder(VisualGrounder):
         api_base: Optional[str] = None,
         model: Optional[str] = None,
         native_resolutions: Optional[Dict[str, Tuple[int, int]]] = None,
-        max_failures: Optional[int] = None,
     ):
         """
         Initialize OpenAI visual grounder.
 
         Args:
-            api_key: OpenAI API key (defaults to OPENAI_API_KEY env var)
-            api_base: API base URL (auto-discovered if not set)
-            model: Model to use (auto-discovered if not set)
+            api_key: OpenAI API key (defaults to OPENAI_API_KEY env var, "not-needed" for LM Studio)
+            api_base: API base URL (defaults to OPENAI_API_BASE env var)
+            model: Model to use (defaults to NAVIGATOR_LLM_MODEL env var)
             native_resolutions: Resolution scaling config for the model
-            max_failures: Max retries before giving up (defaults to FARA_MAX_FAILURES)
         """
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY", "not-needed")
-        self._api_base = api_base  # May be None, will be discovered
-        self._model = model  # May be None, will be discovered
+        self.api_base = api_base or os.environ.get(
+            "OPENAI_API_BASE", "https://api.openai.com/v1"
+        )
+        self.model = model or os.environ.get("NAVIGATOR_LLM_MODEL", "gpt-4o")
         self.native_resolutions = native_resolutions or DEFAULT_NATIVE_RESOLUTIONS
-        self.max_failures = max_failures or int(os.environ.get("FARA_MAX_FAILURES", "2"))
 
-        # Lazy initialization
         self._client = None
-        self._discovered = False
-
-    async def _ensure_discovered(self) -> None:
-        """Discover server and model if not already set."""
-        if self._discovered:
-            return
-
-        if self._api_base is None or self._model is None:
-            url, model_id = await find_fara_server()
-            if self._api_base is None:
-                self._api_base = url
-            if self._model is None:
-                self._model = model_id
-            logger.info(f"Discovered Fara server: {self._api_base}, model: {self._model}")
-
-        self._discovered = True
-
-    @property
-    def api_base(self) -> str:
-        """Get API base URL (may trigger sync discovery fallback)."""
-        if self._api_base is None:
-            # Sync fallback - use first server
-            servers = parse_lmstudio_servers()
-            self._api_base = list(servers.values())[0]
-        return self._api_base
-
-    @property
-    def model(self) -> str:
-        """Get model ID (may trigger sync discovery fallback)."""
-        if self._model is None:
-            # Sync fallback - use first model ID
-            self._model = get_fara_model_ids()[0]
-        return self._model
 
     def _get_client(self):
         """Get or create OpenAI client."""
@@ -274,10 +90,12 @@ class OpenAIVisualGrounder(VisualGrounder):
         """
         Locate element by description using vision model.
 
-        Handles resolution scaling transparently and retries on failure.
+        Handles resolution scaling transparently:
+        1. Get original image dimensions
+        2. Scale to model's native resolution
+        3. Get coordinates from model
+        4. Scale coordinates back to original resolution
         """
-        await self._ensure_discovered()
-
         # Get original dimensions and scale image
         original_size = self._get_image_dimensions(screenshot_b64)
         native_size = self._select_best_resolution(*original_size)
@@ -298,39 +116,23 @@ If the element is not visible, return found=false with null coordinates.
 
 IMPORTANT: Return ONLY the JSON object, no markdown or explanation."""
 
-        failures = 0
-        servers = parse_lmstudio_servers()
-        server_urls = list(servers.values())
+        try:
+            result = await self._invoke_vision(prompt, scaled_screenshot)
 
-        while failures < self.max_failures:
-            try:
-                result = await self._invoke_vision(prompt, scaled_screenshot)
-
-                # Scale coordinates back to original resolution
-                if result.found and result.x is not None and result.y is not None:
-                    result.x, result.y = self._scale_coordinates(
-                        result.x, result.y, original_size, native_size
-                    )
-
-                return result
-
-            except Exception as e:
-                failures += 1
-                logger.warning(
-                    f"Visual grounding failed (attempt {failures}/{self.max_failures}): {e}"
+            # Scale coordinates back to original resolution
+            if result.found and result.x is not None and result.y is not None:
+                result.x, result.y = self._scale_coordinates(
+                    result.x, result.y, original_size, native_size
                 )
 
-                # Try next server if available
-                if failures < len(server_urls):
-                    next_url = server_urls[failures]
-                    logger.info(f"Trying next server: {next_url}")
-                    self._api_base = next_url
-                    self._client = None  # Force client recreation
+            return result
 
-        return LocateResult(
-            found=False,
-            reasoning=f"Failed after {failures} attempts",
-        )
+        except Exception as e:
+            logger.error(f"Visual grounding failed: {e}")
+            return LocateResult(
+                found=False,
+                reasoning=f"Error: {e}",
+            )
 
     async def verify(self, description: str, screenshot_b64: str) -> LocateResult:
         """Verify element exists (uses locate, ignores coordinates)."""

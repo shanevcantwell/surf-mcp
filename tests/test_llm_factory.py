@@ -1,0 +1,296 @@
+"""
+Tests for VisualGrounderFactory and FailoverGrounder.
+
+Tests the factory pattern for creating visual grounders with
+automatic server discovery and failover.
+"""
+
+import os
+import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
+
+from navigator_mcp.llm.factory import VisualGrounderFactory, FailoverGrounder
+from navigator_mcp.llm.base import LocateResult
+from navigator_mcp.llm.lmstudio_discovery import ModelInfo, ServerInfo
+
+
+class TestVisualGrounderFactory:
+    """Tests for the VisualGrounderFactory."""
+
+    @pytest.mark.asyncio
+    async def test_create_returns_openai_adapter_by_default(self):
+        """Factory creates OpenAI adapter when no provider specified."""
+        with patch.dict(os.environ, {"NAVIGATOR_LLM_PROVIDER": "openai"}, clear=False):
+            with patch(
+                "navigator_mcp.llm.factory.discover_fara_server",
+                new_callable=AsyncMock,
+                return_value=("http://localhost:1234/v1", "fara-7b"),
+            ):
+                grounder = await VisualGrounderFactory.create()
+
+                assert grounder.__class__.__name__ == "OpenAIVisualGrounder"
+                assert grounder.api_base == "http://localhost:1234/v1"
+                assert grounder.model == "fara-7b"
+
+    @pytest.mark.asyncio
+    async def test_create_returns_gemini_adapter_when_specified(self):
+        """Factory creates Gemini adapter when provider is gemini."""
+        grounder = await VisualGrounderFactory.create(provider="gemini")
+
+        assert grounder.__class__.__name__ == "GeminiVisualGrounder"
+
+    @pytest.mark.asyncio
+    async def test_create_with_failover_returns_failover_grounder(self):
+        """Factory creates FailoverGrounder with correct config."""
+        with patch.dict(
+            os.environ,
+            {
+                "LMSTUDIO_SERVERS": "gpu1=http://server1/v1,gpu2=http://server2/v1",
+                "FARA_MODEL_IDS": "model-a,model-b",
+                "FARA_MAX_FAILURES": "3",
+            },
+            clear=False,
+        ):
+            grounder = await VisualGrounderFactory.create_with_failover()
+
+            assert isinstance(grounder, FailoverGrounder)
+            assert len(grounder.servers) == 2
+            assert len(grounder.model_ids) == 2
+            assert grounder.max_failures == 3
+
+    @pytest.mark.asyncio
+    async def test_create_uses_discovery_result(self):
+        """Factory uses server discovered by discover_fara_server."""
+        with patch(
+            "navigator_mcp.llm.factory.discover_fara_server",
+            new_callable=AsyncMock,
+            return_value=("http://best-server:1234/v1", "optimal-model"),
+        ):
+            grounder = await VisualGrounderFactory.create()
+
+            assert grounder.api_base == "http://best-server:1234/v1"
+            assert grounder.model == "optimal-model"
+
+
+class TestFailoverGrounder:
+    """Tests for FailoverGrounder failover behavior."""
+
+    @pytest.fixture
+    def failover_grounder(self):
+        """Create a FailoverGrounder with test config."""
+        return FailoverGrounder(
+            servers=[
+                ("server1", "http://server1:1234/v1"),
+                ("server2", "http://server2:1234/v1"),
+            ],
+            model_ids=["model-a", "model-b"],
+            provider="openai",
+            max_failures=3,
+        )
+
+    @pytest.mark.asyncio
+    async def test_locate_success_on_first_try(self, failover_grounder):
+        """Locate succeeds on first try with no failover."""
+        mock_result = LocateResult(found=True, x=100, y=200, confidence=0.9)
+
+        with patch.object(
+            failover_grounder,
+            "_create_adapter",
+            return_value=MagicMock(locate=AsyncMock(return_value=mock_result)),
+        ):
+            result = await failover_grounder.locate("button", "screenshot_b64")
+
+            assert result.found is True
+            assert result.x == 100
+            assert result.y == 200
+
+    @pytest.mark.asyncio
+    async def test_locate_retries_on_failure(self, failover_grounder):
+        """Locate retries with next server on failure."""
+        mock_success = LocateResult(found=True, x=50, y=50)
+
+        # First adapter fails, second succeeds
+        failing_adapter = MagicMock(locate=AsyncMock(side_effect=Exception("Server down")))
+        working_adapter = MagicMock(locate=AsyncMock(return_value=mock_success))
+
+        call_count = 0
+
+        def create_adapter(url, model):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return failing_adapter
+            return working_adapter
+
+        with patch.object(failover_grounder, "_create_adapter", side_effect=create_adapter):
+            result = await failover_grounder.locate("button", "screenshot_b64")
+
+            assert result.found is True
+            assert call_count == 2  # Tried twice
+
+    @pytest.mark.asyncio
+    async def test_locate_fails_after_max_failures(self, failover_grounder):
+        """Locate gives up after max_failures attempts."""
+        failing_adapter = MagicMock(locate=AsyncMock(side_effect=Exception("Always fails")))
+
+        with patch.object(
+            failover_grounder, "_create_adapter", return_value=failing_adapter
+        ):
+            result = await failover_grounder.locate("button", "screenshot_b64")
+
+            assert result.found is False
+            assert "All servers failed" in result.reasoning
+
+    @pytest.mark.asyncio
+    async def test_locate_cycles_through_servers_and_models(self, failover_grounder):
+        """Locate tries different server/model combinations."""
+        configs_tried = []
+
+        def create_adapter(url, model):
+            configs_tried.append((url, model))
+            adapter = MagicMock()
+            adapter.locate = AsyncMock(side_effect=Exception("Fail"))
+            return adapter
+
+        with patch.object(failover_grounder, "_create_adapter", side_effect=create_adapter):
+            await failover_grounder.locate("button", "screenshot_b64")
+
+        # Should have tried multiple configs
+        assert len(configs_tried) == failover_grounder.max_failures
+        # Should cycle through model_ids
+        assert configs_tried[0][1] == "model-a"
+        assert configs_tried[1][1] == "model-b"
+
+    @pytest.mark.asyncio
+    async def test_verify_uses_locate(self, failover_grounder):
+        """Verify delegates to locate."""
+        mock_result = LocateResult(found=True)
+
+        with patch.object(
+            failover_grounder,
+            "_create_adapter",
+            return_value=MagicMock(locate=AsyncMock(return_value=mock_result)),
+        ):
+            result = await failover_grounder.verify("button", "screenshot_b64")
+
+            assert result.found is True
+
+
+class TestLMStudioDiscovery:
+    """Tests for LM Studio server discovery."""
+
+    @pytest.mark.asyncio
+    async def test_discover_prefers_loaded_model(self):
+        """Discovery returns server with model already loaded."""
+        from navigator_mcp.llm.lmstudio_discovery import discover_fara_server, probe_server
+
+        # Mock probe_server to return different states
+        async def mock_probe(url, timeout=2.0):
+            if "server1" in url:
+                return ServerInfo(
+                    name="server1",
+                    url=url,
+                    reachable=True,
+                    models=[ModelInfo(id="fara-7b", state="not-loaded", type="vlm")],
+                )
+            else:
+                return ServerInfo(
+                    name="server2",
+                    url=url,
+                    reachable=True,
+                    models=[ModelInfo(id="fara-7b", state="loaded", type="vlm")],
+                )
+
+        with patch(
+            "navigator_mcp.llm.lmstudio_discovery.probe_server",
+            side_effect=mock_probe,
+        ):
+            with patch.dict(
+                os.environ,
+                {
+                    "LMSTUDIO_SERVERS": "server1=http://server1/v1,server2=http://server2/v1",
+                    "FARA_MODEL_IDS": "fara-7b",
+                },
+            ):
+                url, model = await discover_fara_server()
+
+                # Should pick server2 because model is loaded
+                assert "server2" in url
+                assert model == "fara-7b"
+
+    @pytest.mark.asyncio
+    async def test_discover_falls_back_when_no_loaded(self):
+        """Discovery returns first available when none loaded."""
+        from navigator_mcp.llm.lmstudio_discovery import discover_fara_server
+
+        async def mock_probe(url, timeout=2.0):
+            return ServerInfo(
+                name="test",
+                url=url,
+                reachable=True,
+                models=[ModelInfo(id="fara-7b", state="not-loaded", type="vlm")],
+            )
+
+        with patch(
+            "navigator_mcp.llm.lmstudio_discovery.probe_server",
+            side_effect=mock_probe,
+        ):
+            with patch.dict(
+                os.environ,
+                {
+                    "LMSTUDIO_SERVERS": "gpu1=http://first/v1,gpu2=http://second/v1",
+                    "FARA_MODEL_IDS": "fara-7b",
+                },
+            ):
+                url, model = await discover_fara_server()
+
+                # Should pick first server since none have it loaded
+                assert "first" in url
+
+
+class TestServerParsing:
+    """Tests for LMSTUDIO_SERVERS parsing."""
+
+    def test_parse_multiple_servers(self):
+        """Parses comma-separated server list."""
+        from navigator_mcp.llm.lmstudio_discovery import parse_lmstudio_servers
+
+        with patch.dict(
+            os.environ,
+            {"LMSTUDIO_SERVERS": "gpu1=http://a:1234/v1,gpu2=http://b:1234/v1"},
+        ):
+            servers = parse_lmstudio_servers()
+
+            assert servers == {
+                "gpu1": "http://a:1234/v1",
+                "gpu2": "http://b:1234/v1",
+            }
+
+    def test_parse_single_server(self):
+        """Parses single server."""
+        from navigator_mcp.llm.lmstudio_discovery import parse_lmstudio_servers
+
+        with patch.dict(os.environ, {"LMSTUDIO_SERVERS": "main=http://localhost:1234/v1"}):
+            servers = parse_lmstudio_servers()
+
+            assert servers == {"main": "http://localhost:1234/v1"}
+
+    def test_parse_fallback_when_empty(self):
+        """Falls back to default when LMSTUDIO_SERVERS not set."""
+        from navigator_mcp.llm.lmstudio_discovery import parse_lmstudio_servers
+
+        with patch.dict(os.environ, {}, clear=True):
+            # Clear LMSTUDIO_SERVERS if it exists
+            os.environ.pop("LMSTUDIO_SERVERS", None)
+            servers = parse_lmstudio_servers()
+
+            assert "default" in servers
+
+    def test_parse_model_ids(self):
+        """Parses comma-separated model IDs."""
+        from navigator_mcp.llm.lmstudio_discovery import get_fara_model_ids
+
+        with patch.dict(os.environ, {"FARA_MODEL_IDS": "model-a,model-b,model-c"}):
+            ids = get_fara_model_ids()
+
+            assert ids == ["model-a", "model-b", "model-c"]

@@ -220,18 +220,20 @@ class SessionManager:
         else:
             raise ValueError(f"Unknown driver type: {driver_type}")
 
-    async def _get_visual_grounder(self):
-        """Get or create visual grounder based on environment config."""
-        provider = os.environ.get("NAVIGATOR_LLM_PROVIDER", "openai")
+    async def _get_visual_grounder(self, use_failover: bool = True):
+        """
+        Get visual grounder using the factory.
 
-        if provider == "gemini":
-            from .llm.gemini_adapter import GeminiVisualGrounder
+        Args:
+            use_failover: If True, returns a FailoverGrounder that automatically
+                         retries across servers. If False, returns a simple adapter.
+        """
+        from .llm.factory import VisualGrounderFactory
 
-            return GeminiVisualGrounder()
+        if use_failover:
+            return await VisualGrounderFactory.create_with_failover()
         else:
-            from .llm.openai_adapter import OpenAIVisualGrounder
-
-            return OpenAIVisualGrounder()
+            return await VisualGrounderFactory.create()
 
     async def _cleanup_oldest_session(self) -> None:
         """Remove oldest inactive session to make room."""
