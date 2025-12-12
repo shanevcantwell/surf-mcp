@@ -94,9 +94,25 @@ python -m navigator_mcp
 ```bash
 pip install -e ".[dev]"
 playwright install chromium
-pytest
+pytest                    # All tests (skips unavailable)
+pytest -m "not live"      # Skip LLM tests (for CI)
+pytest -m live -v -s      # Only live LLM tests
+pytest -m integration     # MCP transport tests
+pytest -m browser         # Playwright browser tests
 mypy src/
 ```
+
+#### Test Categories
+| Marker | Description | External Deps |
+|--------|-------------|---------------|
+| (none) | Unit tests - mocked | None |
+| `integration` | MCP client/server transport | MCP server |
+| `browser` | Playwright browser automation | Chromium |
+| `live` | Real LLM API calls | LM Studio / Gemini |
+
+Skip reasons use prefixes:
+- `ENVIRONMENT:` - Missing dependency (install something)
+- `FRAMEWORK:` - Test harness limitation (known issue)
 
 ### Adding a New Driver
 
@@ -156,7 +172,9 @@ Commands return structured results with success/error fields. Never raise except
 ### Test Harness
 - `tools/fara-harness/app.py` - Streamlit UI for Fara testing
 - `tools/fara-harness/mcp_client.py` - MCP client wrapper
-- `tools/fara-harness/utils.py` - Command parsing and image utilities
+- `tools/fara-harness/utils.py` - Image utilities (storage state, overlays)
+
+**Architecture:** All user commands go directly to Fara via `act()` without parsing or manipulation. The harness does not interpret commands - Fara decides what action to take.
 
 ---
 
@@ -192,3 +210,27 @@ Commands return structured results with success/error fields. Never raise except
 - `wait` - Wait for element or delay
 - `act` - Direct Fara execution (Fara decides the action) (ADR-005)
 - `act_autonomous` - Multi-step autonomous execution (ADR-005)
+
+---
+
+## Open Questions
+
+### How should clicks that open new tabs be handled?
+
+**Context:** Many sites (Google News, search results, etc.) use `target="_blank"` links. When Fara clicks these, the browser opens a new tab but the harness continues showing the original page.
+
+**Current behavior:** PlaywrightExecutor detects new tabs and waits for them to load, but doesn't switch the active page. The screenshot refresh shows the original tab.
+
+**Options to consider:**
+
+1. **Auto-switch to new tab** - When a click opens a new tab, automatically make it the active page for future operations. Pro: Follows user intent. Con: May lose context of original page.
+
+2. **Return new tab info in result** - Include `{"new_tab_opened": true, "new_tab_url": "..."}` in the action result so the caller can decide. Pro: Explicit control. Con: More complexity for caller.
+
+3. **Multi-tab awareness** - Add tab management commands (`list_tabs`, `switch_tab`, `close_tab`). Pro: Full control. Con: Significant new surface area.
+
+4. **Modifier for link behavior** - Add option like `{"follow_links_in_same_tab": true}` to force same-tab navigation. Pro: Predictable. Con: May not work with all sites/JS.
+
+5. **Let Fara handle it** - If user says "click the article and read it", Fara should recognize the new tab and operate there. Pro: Natural. Con: Requires Fara to understand multi-tab context.
+
+**Question:** What's the right abstraction? The Navigator model assumes "one location" - does multi-tab break that?
