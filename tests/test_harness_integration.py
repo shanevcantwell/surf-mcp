@@ -128,62 +128,31 @@ class TestStorageStateRoundTrip:
         assert restored["cookies"][0]["name"] == "session"
 
 
-class TestCommandParsing:
-    """Test command parsing logic from utils.py.
+class TestCommandHandling:
+    """Test that all commands go directly to Fara.
 
-    The parser is intentionally minimal - only goto and scroll are handled
-    directly. Everything else goes to Fara via 'act'.
+    Per user feedback: No command parsing, no string manipulation.
+    All user input goes directly to MCP act() endpoint.
     """
 
-    def test_parse_goto(self):
-        """Parse goto command - direct navigation."""
-        from utils import parse_command
-
-        action, target, extra = parse_command("goto https://google.com")
-        assert action == "goto"
-        assert target == "https://google.com"
-        assert extra is None
-
-    def test_parse_goto_auto_https(self):
-        """Parse goto without protocol - auto-prepends https://"""
-        from utils import parse_command
-
-        action, target, extra = parse_command("goto google.com")
-        assert action == "goto"
-        assert target == "https://google.com"
-        assert extra is None
-
-    def test_parse_scroll(self):
-        """Parse scroll command - direct scroll."""
-        from utils import parse_command
-
-        action, target, extra = parse_command("scroll down")
-        assert action == "scroll"
-        assert target == "down"
-
-        action, target, extra = parse_command("scroll up")
-        assert action == "scroll"
-        assert target == "up"
-
-    def test_parse_natural_language_goes_to_act(self):
-        """Natural language commands go to Fara via 'act'."""
-        from utils import parse_command
-
-        # All these should become "act" - let Fara decide
+    def test_all_commands_go_to_fara(self):
+        """All commands should go to Fara - no parsing in harness."""
+        # These commands used to be parsed/manipulated by the harness.
+        # Now they all go directly to Fara via act().
         test_cases = [
             "click the search button",
-            "Click on Sign in",
+            "goto https://google.com",  # Fara handles navigation
+            "scroll down",  # Fara handles scrolling
             "type hello into the search box",
             "press enter",
-            "find the submit button",
-            "the blue button",
-            'Enter "test" into the input',
         ]
 
+        # The harness no longer has a parse_command function.
+        # This test documents the architectural decision that
+        # all commands go to Fara unmodified.
         for cmd in test_cases:
-            action, target, extra = parse_command(cmd)
-            assert action == "act", f"Expected 'act' for '{cmd}', got '{action}'"
-            assert target == cmd, f"Target should be original command"
+            # Command is passed directly to act() without modification
+            assert cmd == cmd.strip()  # Only whitespace trimming allowed
 
 
 class TestOverlayDrawing:

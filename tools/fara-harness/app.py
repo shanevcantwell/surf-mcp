@@ -16,7 +16,6 @@ from utils import (
     save_storage_state,
     decode_screenshot,
     draw_overlay,
-    parse_command,
 )
 
 
@@ -95,50 +94,39 @@ def refresh_screenshot():
 
 
 def execute_command(command: str):
-    """Execute a command and update state."""
+    """
+    Execute a command - ALL commands go to Fara via act().
+
+    No parsing, no manipulation. Fara decides what to do.
+    """
     if not command.strip():
         return
 
-    action, target, extra = parse_command(command)
     add_to_history(f"> {command}")
 
     try:
         client = st.session_state.client
         session_id = st.session_state.session_id
 
-        if action == "goto":
-            # Direct navigation - no LLM needed
-            result = client.goto(session_id, target)
-            if "error" in result:
-                add_to_history(f"  ✗ {result['error']}")
+        # All commands go to Fara - it decides the action
+        result = client.act(session_id, command)
+        st.session_state.last_act = result
+
+        # Extract action info from result
+        fara_action = result.get("fara_action", "unknown")
+        coord = result.get("coordinate")
+        reasoning = result.get("reasoning", "")
+
+        if result.get("success"):
+            if coord:
+                add_to_history(f"  ✓ {fara_action} at ({coord[0]}, {coord[1]})")
             else:
-                add_to_history(f"  ✓ Navigated to {target}")
-
-        elif action == "scroll":
-            # Simple scroll - no LLM needed
-            result = client.scroll(session_id, target)
-            add_to_history(f"  ✓ Scrolled {target}")
-
-        elif action == "act":
-            # Everything else: let Fara decide what to do
-            result = client.act(session_id, target)
-            st.session_state.last_act = result
-
-            # Extract action info from result
-            fara_action = result.get("fara_action", "unknown")
-            coord = result.get("coordinate")
-            reasoning = result.get("reasoning", "")
-
-            if result.get("success"):
-                if coord:
-                    add_to_history(f"  ✓ {fara_action} at ({coord[0]}, {coord[1]})")
-                else:
-                    add_to_history(f"  ✓ {fara_action}")
-                if reasoning:
-                    add_to_history(f"    {reasoning[:80]}...")
-            else:
-                error = result.get("error", "unknown")
-                add_to_history(f"  ✗ {error}")
+                add_to_history(f"  ✓ {fara_action}")
+            if reasoning:
+                add_to_history(f"    {reasoning[:80]}...")
+        else:
+            error = result.get("error", "unknown")
+            add_to_history(f"  ✗ {error}")
 
         # Auto-refresh screenshot after action
         refresh_screenshot()
@@ -243,23 +231,43 @@ def main():
                 except Exception as e:
                     show_error(str(e))
         else:
-            # Navigation
+            # Navigation (direct MCP calls - not through Fara)
             st.subheader("Navigate")
             with st.form(key="nav_form", clear_on_submit=False):
                 url = st.text_input("URL", value=DEFAULT_URL, label_visibility="collapsed")
                 if st.form_submit_button("Go", use_container_width=True):
-                    execute_command(f"goto {url}")
+                    try:
+                        result = st.session_state.client.goto(
+                            st.session_state.session_id, url
+                        )
+                        if result.get("error"):
+                            add_to_history(f"  ✗ {result['error']}")
+                        else:
+                            add_to_history(f"  ✓ Navigated to {url}")
+                        refresh_screenshot()
+                    except Exception as e:
+                        add_to_history(f"  ✗ Error: {e}")
                     st.rerun()
 
-            # Quick actions
+            # Quick actions (direct MCP calls)
             col1, col2 = st.columns(2)
             with col1:
                 if st.button("↑", use_container_width=True, help="Scroll up"):
-                    execute_command("scroll up")
+                    try:
+                        st.session_state.client.scroll(st.session_state.session_id, "up")
+                        add_to_history("  ✓ Scrolled up")
+                        refresh_screenshot()
+                    except Exception as e:
+                        add_to_history(f"  ✗ Error: {e}")
                     st.rerun()
             with col2:
                 if st.button("↓", use_container_width=True, help="Scroll down"):
-                    execute_command("scroll down")
+                    try:
+                        st.session_state.client.scroll(st.session_state.session_id, "down")
+                        add_to_history("  ✓ Scrolled down")
+                        refresh_screenshot()
+                    except Exception as e:
+                        add_to_history(f"  ✗ Error: {e}")
                     st.rerun()
 
             if st.button("🔄 Refresh", use_container_width=True):
@@ -317,15 +325,13 @@ def main():
 - `Press enter`
 - `Find the login link`
 - `Scroll down`
-
-**Navigation:**
-- `goto https://example.com`
-- `scroll up` / `scroll down`
+- `Go to https://example.com`
 
 **Tips:**
 - Be specific: "the blue Submit button" > "submit"
 - Use visual cues: "the hamburger menu in the top right"
 - For dropdowns covering buttons: "press enter" or "press escape"
+- Use the sidebar URL field for direct navigation
         """)
 
 

@@ -110,9 +110,36 @@ class PlaywrightExecutor:
                             action=action,
                             error="Click action requires coordinates",
                         )
-                    await page.mouse.click(
-                        tool_call.coordinate[0], tool_call.coordinate[1]
-                    )
+                    x, y = tool_call.coordinate[0], tool_call.coordinate[1]
+
+                    # Track pages before click to detect new tabs
+                    context = page.context
+                    pages_before = len(context.pages)
+
+                    # Execute click
+                    await page.mouse.click(x, y)
+
+                    # Wait briefly for any popup/new tab
+                    try:
+                        await page.wait_for_timeout(500)
+                    except Exception:
+                        pass
+
+                    # Check if a new tab opened (target="_blank" links)
+                    if len(context.pages) > pages_before:
+                        new_page = context.pages[-1]
+                        logger.info(f"Click opened new tab: {new_page.url}")
+                        # Wait for new page to load
+                        try:
+                            await new_page.wait_for_load_state("domcontentloaded", timeout=5000)
+                        except Exception:
+                            pass
+                    else:
+                        # Wait for navigation on current page
+                        try:
+                            await page.wait_for_load_state("domcontentloaded", timeout=3000)
+                        except Exception:
+                            pass  # No navigation is fine
 
                 case "double_click":
                     if not tool_call.coordinate:

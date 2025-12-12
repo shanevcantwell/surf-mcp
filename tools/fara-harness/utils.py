@@ -81,32 +81,6 @@ def draw_overlay(
     return img
 
 
-# ==================== Command Parsing ====================
-
-def parse_command(text: str) -> Tuple[str, str, Optional[str]]:
-    """
-    Parse user command into (action, target, extra).
-
-    Only handles navigation commands that don't need Fara.
-    Everything else goes to `act` and lets Fara decide.
-    """
-    text = text.strip()
-    lower = text.lower()
-
-    # goto url - direct navigation, no LLM needed
-    if lower.startswith("goto "):
-        url = text[5:].strip()
-        # Auto-prepend https:// if no protocol specified
-        if url and not url.startswith(("http://", "https://")):
-            url = f"https://{url}"
-        return ("goto", url, None)
-
-    # scroll - could go to Fara, but simple enough to handle directly
-    if lower.startswith("scroll "):
-        direction = text[7:].strip().lower()
-        if direction not in ("up", "down"):
-            direction = "down"
-        return ("scroll", direction, None)
-
-    # Everything else: let Fara decide what to do
-    return ("act", text, None)
+# ==================== Command Handling ====================
+# NOTE: No command parsing here - Fara decides all actions.
+# The harness passes user input directly to the MCP server without manipulation.
