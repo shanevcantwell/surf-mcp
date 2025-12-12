@@ -59,6 +59,7 @@ warn_required_dynamic_aliases = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
-    "integration: marks tests requiring live server",
+    "integration: marks tests requiring MCP server (but no LLM)",
     "browser: marks tests requiring playwright chromium",
+    "live: marks tests hitting real LLM APIs (LM Studio, Gemini, OpenAI) - slow, non-deterministic",
 ]

@@ -1,9 +1,10 @@
 """
-Real Fara Integration Tests - NOT mocked.
+Live Fara Tests - Hits real LLM APIs.
 
 These tests actually call LM Studio. They're skipped if LM Studio isn't available.
 
-Run with: pytest tests/test_fara_real.py -v -s
+Run with: pytest -m live -v -s
+Skip with: pytest -m "not live"
 """
 
 import asyncio
@@ -23,10 +24,14 @@ def lmstudio_available() -> bool:
         return False
 
 
-pytestmark = pytest.mark.skipif(
-    not lmstudio_available(),
-    reason="LM Studio not available at localhost:1234"
-)
+# Mark all tests in this module as "live" (real LLM API calls)
+pytestmark = [
+    pytest.mark.live,
+    pytest.mark.skipif(
+        not lmstudio_available(),
+        reason="ENVIRONMENT: LM Studio not available at localhost:1234"
+    ),
+]
 
 
 @pytest.fixture
