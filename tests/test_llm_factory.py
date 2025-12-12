@@ -248,6 +248,150 @@ class TestLMStudioDiscovery:
                 assert "first" in url
 
 
+class TestFaraResponseParsing:
+    """Tests for Fara tool_call response parsing."""
+
+    @pytest.fixture
+    def grounder(self):
+        """Create an OpenAI grounder for testing parsing."""
+        from navigator_mcp.llm.openai_adapter import OpenAIVisualGrounder
+        return OpenAIVisualGrounder()
+
+    def test_parse_computer_use_left_click(self, grounder):
+        """Parse Fara's computer_use left_click format."""
+        tool_json = {
+            "name": "computer_use",
+            "arguments": {"action": "left_click", "coordinate": [624, 280]}
+        }
+        result = grounder._normalize_tool_call(tool_json)
+
+        assert result.found is True
+        assert result.x == 624
+        assert result.y == 280
+        assert result.confidence == 1.0
+        assert "left_click" in result.reasoning
+
+    def test_parse_computer_use_type_with_coords(self, grounder):
+        """Parse Fara's computer_use type action with coordinates."""
+        tool_json = {
+            "name": "computer_use",
+            "arguments": {"action": "type", "text": "hello", "coordinate": [100, 200]}
+        }
+        result = grounder._normalize_tool_call(tool_json)
+
+        assert result.found is True
+        assert result.x == 100
+        assert result.y == 200
+
+    def test_parse_playwright_format(self, grounder):
+        """Parse Fara's playwright tool_call format."""
+        tool_json = {
+            "name": "playwright",
+            "arguments": {"action": "click", "coordinate": [624, 280]}
+        }
+        result = grounder._normalize_tool_call(tool_json)
+
+        assert result.found is True
+        assert result.x == 624
+        assert result.y == 280
+        assert result.confidence == 1.0
+
+    def test_parse_computer_format(self, grounder):
+        """Parse Fara's computer tool_call format."""
+        tool_json = {
+            "name": "computer",
+            "arguments": {"action": "left_click", "coordinate": [100, 200]}
+        }
+        result = grounder._normalize_tool_call(tool_json)
+
+        assert result.found is True
+        assert result.x == 100
+        assert result.y == 200
+
+    def test_parse_scroll_no_coordinates(self, grounder):
+        """Parse Fara's scroll action (no coordinates needed)."""
+        tool_json = {
+            "name": "computer_use",
+            "arguments": {"action": "scroll", "pixels": 100}
+        }
+        result = grounder._normalize_tool_call(tool_json)
+
+        assert result.found is True
+        assert result.x is None
+        assert result.y is None
+        assert "scroll" in result.reasoning
+
+    def test_parse_terminate_action(self, grounder):
+        """Parse Fara's terminate action."""
+        tool_json = {
+            "name": "computer_use",
+            "arguments": {"action": "terminate", "status": "success"}
+        }
+        result = grounder._normalize_tool_call(tool_json)
+
+        assert result.found is True
+        assert result.x is None
+        assert "terminate" in result.reasoning
+
+    def test_parse_serpico_format(self, grounder):
+        """Parse Fara's serpico tool_call format."""
+        tool_json = {
+            "name": "serpico",
+            "arguments": {"found": True, "x": [300, 400]}
+        }
+        result = grounder._normalize_tool_call(tool_json)
+
+        assert result.found is True
+        assert result.x == 300
+        assert result.y == 400
+
+    def test_parse_unknown_format_returns_not_found(self, grounder):
+        """Unknown tool_call format returns found=False with debug info."""
+        tool_json = {
+            "name": "unknown_tool",
+            "arguments": {"something": "else"}
+        }
+        result = grounder._normalize_tool_call(tool_json)
+
+        assert result.found is False
+        assert "unknown_tool" in result.reasoning
+
+    def test_parse_response_with_tool_call_tags(self, grounder):
+        """Parse response wrapped in <tool_call> tags."""
+        text = '<tool_call>{"name": "playwright", "arguments": {"action": "click", "coordinate": [512, 384]}}</tool_call>'
+        result = grounder._parse_response(text)
+
+        assert result.found is True
+        assert result.x == 512
+        assert result.y == 384
+
+    def test_parse_response_with_markdown_json(self, grounder):
+        """Parse response with markdown code block."""
+        text = '```json\n{"found": true, "x": 100, "y": 200, "confidence": 0.95}\n```'
+        result = grounder._parse_response(text)
+
+        assert result.found is True
+        assert result.x == 100
+        assert result.y == 200
+        assert result.confidence == 0.95
+
+    def test_parse_response_with_raw_json(self, grounder):
+        """Parse raw JSON response."""
+        text = '{"found": true, "x": 50, "y": 75, "confidence": 0.8, "reasoning": "Found button"}'
+        result = grounder._parse_response(text)
+
+        assert result.found is True
+        assert result.x == 50
+        assert result.y == 75
+
+    def test_parse_response_unparseable_returns_not_found(self, grounder):
+        """Unparseable response returns found=False."""
+        text = "I cannot find the element you described."
+        result = grounder._parse_response(text)
+
+        assert result.found is False
+
+
 class TestServerParsing:
     """Tests for LMSTUDIO_SERVERS parsing."""
 

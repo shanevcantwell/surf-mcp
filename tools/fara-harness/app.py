@@ -27,11 +27,9 @@ DEFAULT_URL = "https://www.google.com"
 
 def format_error(error: str) -> str:
     """Format error message for display, extracting key information."""
-    # Playwright browser not installed
     if "Playwright browser not installed" in error or "Executable doesn't exist" in error:
         return "Playwright browser not installed. Run: `playwright install chromium`"
 
-    # Browser crashed or closed (often display/X11 issue in WSL)
     if "browser has been closed" in error or "Target page, context" in error:
         return (
             "Browser closed unexpectedly. If running in WSL without a display:\n"
@@ -40,11 +38,9 @@ def format_error(error: str) -> str:
             "3. Or run with headless=True in session_create"
         )
 
-    # MCP connection errors
     if "Connection refused" in error:
         return "Cannot connect to navigator-mcp server. Ensure it is running."
 
-    # Playwright package not installed
     if "playwright package required" in error.lower():
         return "Playwright not installed. Run: `pip install playwright && playwright install chromium`"
 
@@ -73,14 +69,82 @@ def init_session_state():
         st.session_state.last_locate = None
     if "connected" not in st.session_state:
         st.session_state.connected = False
+    # ADR-005: Track last act result for tool_call display
+    if "last_act" not in st.session_state:
+        st.session_state.last_act = None
+    if "last_act_auto" not in st.session_state:
+        st.session_state.last_act_auto = None
 
 
 def add_to_history(entry: str):
     """Add entry to chat history."""
     st.session_state.history.append(entry)
-    # Keep last 100 entries
     if len(st.session_state.history) > 100:
         st.session_state.history = st.session_state.history[-100:]
+
+
+def refresh_screenshot():
+    """Refresh the screenshot from browser."""
+    if st.session_state.connected and st.session_state.client:
+        try:
+            result = st.session_state.client.snapshot(st.session_state.session_id)
+            if "snapshot" in result:
+                st.session_state.screenshot = result["snapshot"]
+        except Exception:
+            pass  # Silent fail on auto-refresh
+
+
+def execute_command(command: str):
+    """Execute a command and update state."""
+    if not command.strip():
+        return
+
+    action, target, extra = parse_command(command)
+    add_to_history(f"> {command}")
+
+    try:
+        client = st.session_state.client
+        session_id = st.session_state.session_id
+
+        if action == "goto":
+            # Direct navigation - no LLM needed
+            result = client.goto(session_id, target)
+            if "error" in result:
+                add_to_history(f"  ✗ {result['error']}")
+            else:
+                add_to_history(f"  ✓ Navigated to {target}")
+
+        elif action == "scroll":
+            # Simple scroll - no LLM needed
+            result = client.scroll(session_id, target)
+            add_to_history(f"  ✓ Scrolled {target}")
+
+        elif action == "act":
+            # Everything else: let Fara decide what to do
+            result = client.act(session_id, target)
+            st.session_state.last_act = result
+
+            # Extract action info from result
+            fara_action = result.get("fara_action", "unknown")
+            coord = result.get("coordinate")
+            reasoning = result.get("reasoning", "")
+
+            if result.get("success"):
+                if coord:
+                    add_to_history(f"  ✓ {fara_action} at ({coord[0]}, {coord[1]})")
+                else:
+                    add_to_history(f"  ✓ {fara_action}")
+                if reasoning:
+                    add_to_history(f"    {reasoning[:80]}...")
+            else:
+                error = result.get("error", "unknown")
+                add_to_history(f"  ✗ {error}")
+
+        # Auto-refresh screenshot after action
+        refresh_screenshot()
+
+    except Exception as e:
+        add_to_history(f"  ✗ Error: {e}")
 
 
 # ==================== Main UI ====================
@@ -94,122 +158,38 @@ def main():
 
     init_session_state()
 
-    st.title("🎯 Fara Test Harness")
-    st.caption("Visual grounding experimentation via MCP")
-
-    # ==================== Sidebar: Connection & URL ====================
-    with st.sidebar:
-        st.header("Connection")
-
-        if not st.session_state.connected:
-            # Headless toggle - useful for WSL without X11
-            headless = st.checkbox(
-                "Headless mode",
-                value=False,
-                help="Run browser without visible window (required in WSL without X server)",
-            )
-
-            if st.button("Connect to Navigator MCP"):
-                try:
-                    client = SyncNavigatorClient()
-                    client.connect()
-
-                    # Load storage state if exists
-                    storage_state = load_storage_state()
-
-                    result = client.session_create(
-                        headless=headless,
-                        storage_state=storage_state,
-                    )
-
-                    if "error" in result:
-                        show_error(result['error'])
-                    else:
-                        st.session_state.client = client
-                        st.session_state.session_id = result["session_id"]
-                        st.session_state.connected = True
-                        mode = "headless" if headless else "visible"
-                        add_to_history(f"✓ Connected ({mode}): session={result['session_id']}")
-                        st.rerun()
-
-                except Exception as e:
-                    show_error(str(e))
+    # ==================== Header with Connection Status ====================
+    col_title, col_status = st.columns([3, 1])
+    with col_title:
+        st.title("🎯 Fara Test Harness")
+    with col_status:
+        if st.session_state.connected:
+            st.success(f"🟢 Connected")
         else:
-            st.success(f"Connected: {st.session_state.session_id}")
+            st.warning("🔴 Disconnected")
 
-            if st.button("Disconnect"):
-                try:
-                    result = st.session_state.client.session_destroy(
-                        st.session_state.session_id
-                    )
-                    # Save storage state
-                    if "summary" in result:
-                        web_summary = result["summary"].get("web", {})
-                        if "storage_state" in web_summary:
-                            save_storage_state(web_summary["storage_state"])
-                            add_to_history("✓ Storage state saved")
-
-                    st.session_state.client.disconnect()
-                except Exception as e:
-                    st.warning(f"Disconnect error: {e}")
-                finally:
-                    st.session_state.client = None
-                    st.session_state.session_id = None
-                    st.session_state.connected = False
-                    st.session_state.screenshot = None
-                    add_to_history("✓ Disconnected")
-                    st.rerun()
-
-        st.divider()
-
-        # URL Navigation
-        st.header("Navigation")
-        url = st.text_input("URL", value=DEFAULT_URL)
-        if st.button("Navigate", disabled=not st.session_state.connected):
-            try:
-                result = st.session_state.client.goto(
-                    st.session_state.session_id, url
+    # ==================== Command Input (Top - Enter submits) ====================
+    if st.session_state.connected:
+        with st.form(key="command_form", clear_on_submit=True):
+            col_input, col_submit = st.columns([5, 1])
+            with col_input:
+                command = st.text_input(
+                    "Command",
+                    placeholder='the search button | click "Sign in" | type "email" user@example.com',
+                    label_visibility="collapsed",
                 )
-                if "error" in result:
-                    add_to_history(f"✗ goto failed: {result['error']}")
-                else:
-                    add_to_history(f"> goto {url}")
-                    if "snapshot" in result:
-                        st.session_state.screenshot = result["snapshot"]
-                    st.session_state.last_locate = None
-                    st.rerun()
-            except Exception as e:
-                add_to_history(f"✗ Error: {e}")
+            with col_submit:
+                submitted = st.form_submit_button("↵", use_container_width=True)
 
-        if st.button("Refresh Screenshot", disabled=not st.session_state.connected):
-            try:
-                result = st.session_state.client.snapshot(st.session_state.session_id)
-                if "snapshot" in result:
-                    st.session_state.screenshot = result["snapshot"]
-                    add_to_history("✓ Screenshot refreshed")
-                    st.rerun()
-            except Exception as e:
-                add_to_history(f"✗ Error: {e}")
+            if submitted and command:
+                execute_command(command)
+                st.rerun()
 
-        st.divider()
+    # ==================== Main Layout ====================
+    col_browser, col_sidebar = st.columns([3, 1])
 
-        # Storage state info
-        st.header("Storage State")
-        if STORAGE_STATE_PATH.exists():
-            state = load_storage_state()
-            if state:
-                n_cookies = len(state.get("cookies", []))
-                n_origins = len(state.get("origins", []))
-                st.info(f"Cookies: {n_cookies}, Origins: {n_origins}")
-        else:
-            st.info("No saved state")
-
-    # ==================== Main Area: Two Columns ====================
-    col1, col2 = st.columns([2, 1])
-
-    with col1:
-        st.subheader("Browser View")
-
+    # ==================== Browser View ====================
+    with col_browser:
         if st.session_state.screenshot:
             try:
                 img = decode_screenshot(st.session_state.screenshot)
@@ -228,118 +208,124 @@ def main():
                 st.image(img, use_container_width=True)
             except Exception as e:
                 st.error(f"Failed to display screenshot: {e}")
+        elif st.session_state.connected:
+            st.info("Connected. Enter a URL below or use `goto https://...`")
         else:
-            st.info("No screenshot. Connect and navigate to a URL.")
+            st.info("Click 'Connect' to start a browser session.")
 
-    with col2:
-        st.subheader("Command History")
+    # ==================== Sidebar ====================
+    with col_sidebar:
+        # Connection controls
+        if not st.session_state.connected:
+            st.subheader("Connect")
+            headless = st.checkbox("Headless mode", value=True)
 
-        # Display history (newest first)
-        history_container = st.container(height=400)
-        with history_container:
-            for entry in reversed(st.session_state.history[-50:]):
-                if entry.startswith(">"):
-                    st.markdown(f"**{entry}**")
-                elif entry.startswith("✓"):
-                    st.success(entry)
-                elif entry.startswith("✗"):
-                    st.error(entry)
-                else:
-                    st.text(entry)
+            if st.button("Connect", use_container_width=True):
+                try:
+                    client = SyncNavigatorClient()
+                    client.connect()
 
-    # ==================== Command Input ====================
-    st.divider()
-
-    prompt_col, button_col = st.columns([4, 1])
-
-    with prompt_col:
-        command = st.text_input(
-            "Command",
-            placeholder='locate "the search button" | click "Submit" | type "input field" hello',
-            disabled=not st.session_state.connected,
-            key="command_input",
-        )
-
-    with button_col:
-        st.write("")  # Spacing
-        go_clicked = st.button("Go", disabled=not st.session_state.connected)
-
-    if go_clicked and command:
-        action, target, extra = parse_command(command)
-        add_to_history(f"> {command}")
-
-        try:
-            client = st.session_state.client
-            session_id = st.session_state.session_id
-
-            if action == "goto":
-                result = client.goto(session_id, target)
-                if "snapshot" in result:
-                    st.session_state.screenshot = result["snapshot"]
-                st.session_state.last_locate = None
-
-            elif action == "scroll":
-                result = client.scroll(session_id, target)
-                if "snapshot" in result:
-                    st.session_state.screenshot = result["snapshot"]
-                st.session_state.last_locate = None
-
-            elif action == "locate":
-                result = client.locate(session_id, target)
-                st.session_state.last_locate = result
-                if result.get("found"):
-                    add_to_history(
-                        f"  Found: ({result['x']}, {result['y']}) "
-                        f"conf={result.get('confidence', 'N/A')}"
+                    storage_state = load_storage_state()
+                    result = client.session_create(
+                        headless=headless,
+                        storage_state=storage_state,
                     )
+
+                    if "error" in result:
+                        show_error(result['error'])
+                    else:
+                        st.session_state.client = client
+                        st.session_state.session_id = result["session_id"]
+                        st.session_state.connected = True
+                        add_to_history(f"✓ Connected: {result['session_id'][:8]}...")
+                        st.rerun()
+
+                except Exception as e:
+                    show_error(str(e))
+        else:
+            # Navigation
+            st.subheader("Navigate")
+            with st.form(key="nav_form", clear_on_submit=False):
+                url = st.text_input("URL", value=DEFAULT_URL, label_visibility="collapsed")
+                if st.form_submit_button("Go", use_container_width=True):
+                    execute_command(f"goto {url}")
+                    st.rerun()
+
+            # Quick actions
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("↑", use_container_width=True, help="Scroll up"):
+                    execute_command("scroll up")
+                    st.rerun()
+            with col2:
+                if st.button("↓", use_container_width=True, help="Scroll down"):
+                    execute_command("scroll down")
+                    st.rerun()
+
+            if st.button("🔄 Refresh", use_container_width=True):
+                refresh_screenshot()
+                add_to_history("✓ Screenshot refreshed")
+                st.rerun()
+
+            st.divider()
+
+            # Disconnect
+            if st.button("Disconnect", use_container_width=True, type="secondary"):
+                try:
+                    result = st.session_state.client.session_destroy(
+                        st.session_state.session_id
+                    )
+                    if "summary" in result:
+                        web_summary = result["summary"].get("web", {})
+                        if "storage_state" in web_summary:
+                            save_storage_state(web_summary["storage_state"])
+                            add_to_history("✓ Storage state saved")
+
+                    st.session_state.client.disconnect()
+                except Exception as e:
+                    st.warning(f"Disconnect error: {e}")
+                finally:
+                    st.session_state.client = None
+                    st.session_state.session_id = None
+                    st.session_state.connected = False
+                    st.session_state.screenshot = None
+                    add_to_history("✓ Disconnected")
+                    st.rerun()
+
+        # History
+        st.divider()
+        st.subheader("History")
+        history_container = st.container(height=300)
+        with history_container:
+            for entry in reversed(st.session_state.history[-30:]):
+                if entry.startswith(">"):
+                    st.code(entry[2:], language=None)
+                elif "✓" in entry:
+                    st.caption(f"🟢 {entry.replace('✓', '').strip()}")
+                elif "✗" in entry:
+                    st.caption(f"🔴 {entry.replace('✗', '').strip()}")
                 else:
-                    add_to_history(f"  Not found: {result.get('reasoning', 'unknown')}")
+                    st.caption(entry)
 
-            elif action == "click":
-                result = client.click(session_id, target)
-                if result.get("success"):
-                    add_to_history("  ✓ Clicked")
-                    if "snapshot" in result:
-                        st.session_state.screenshot = result["snapshot"]
-                else:
-                    add_to_history(f"  ✗ Click failed: {result.get('error', 'unknown')}")
-                st.session_state.last_locate = None
-
-            elif action == "type":
-                result = client.type_text(session_id, target, extra)
-                if result.get("success"):
-                    add_to_history(f"  ✓ Typed: {extra}")
-                    if "snapshot" in result:
-                        st.session_state.screenshot = result["snapshot"]
-                else:
-                    add_to_history(f"  ✗ Type failed: {result.get('error', 'unknown')}")
-                st.session_state.last_locate = None
-
-            st.rerun()
-
-        except Exception as e:
-            add_to_history(f"  ✗ Error: {e}")
-            st.rerun()
-
-    # ==================== Help ====================
+    # ==================== Help (collapsed by default) ====================
     with st.expander("Command Help"):
         st.markdown("""
-        **Available commands:**
+**Just type what you want to do** - Fara understands natural language:
 
-        - `locate "description"` - Find element by description, show coordinates
-        - `click "description"` - Click on element
-        - `type "description" text` - Type text into element
-        - `goto url` - Navigate to URL
-        - `scroll up/down` - Scroll the page
+- `Click the search button`
+- `Type hello into the search box`
+- `Press enter`
+- `Find the login link`
+- `Scroll down`
 
-        **Examples:**
-        ```
-        locate "the search button"
-        click "Sign in"
-        type "email input" user@example.com
-        goto https://gemini.google.com
-        scroll down
-        ```
+**Navigation:**
+- `goto https://example.com`
+- `scroll up` / `scroll down`
+
+**Tips:**
+- Be specific: "the blue Submit button" > "submit"
+- Use visual cues: "the hamburger menu in the top right"
+- For dropdowns covering buttons: "press enter" or "press escape"
         """)
 
 

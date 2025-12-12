@@ -218,6 +218,36 @@ class NavigatorMCPClient:
             args["amount"] = amount
         return await self.call_tool("scroll", args)
 
+    # ==================== ADR-005: Direct Fara Execution ====================
+
+    async def act(self, session_id: str, goal: str) -> Dict[str, Any]:
+        """
+        Execute goal using direct Fara execution.
+
+        Per ADR-005: Fara decides what action to take, returns full tool_call.
+
+        Returns:
+            NavigatorState with fara_action, coordinate, confidence
+        """
+        return await self.call_tool("act", {
+            "session_id": session_id,
+            "driver": "web",
+            "goal": goal,
+        })
+
+    async def act_autonomous(self, session_id: str, goal: str) -> Dict[str, Any]:
+        """
+        Execute goal autonomously with multi-step Fara loop.
+
+        Returns:
+            {success, step_count, steps[], final_screenshot, reason}
+        """
+        return await self.call_tool("act_autonomous", {
+            "session_id": session_id,
+            "driver": "web",
+            "goal": goal,
+        })
+
 
 class SyncNavigatorClient:
     """
@@ -281,3 +311,11 @@ class SyncNavigatorClient:
 
     def scroll(self, session_id: str, direction: str = "down") -> Dict[str, Any]:
         return self._run(self._client.scroll(session_id, direction))
+
+    # ADR-005: Direct Fara Execution
+
+    def act(self, session_id: str, goal: str) -> Dict[str, Any]:
+        return self._run(self._client.act(session_id, goal))
+
+    def act_autonomous(self, session_id: str, goal: str) -> Dict[str, Any]:
+        return self._run(self._client.act_autonomous(session_id, goal))

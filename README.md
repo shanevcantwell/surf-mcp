@@ -20,9 +20,45 @@ The key insight is that navigating a filesystem and navigating a web browser sha
 
 - **Multi-driver sessions**: Combine filesystem + browser in one session
 - **Visual grounding**: Click/type by natural language description (no CSS selectors)
+- **Direct Fara execution**: Fara decides the action, we execute it (ADR-005)
+- **Autonomous mode**: Multi-step goal completion with progress tracking
 - **Multi-server LM Studio**: Auto-discovery and failover across GPU servers
 - **Session persistence**: Storage state (cookies, localStorage) round-trips through tool calls
 - **Security controls**: Domain allowlists, rate limiting, sandbox enforcement
+
+## How Visual Grounding Works
+
+Navigator uses **Fara-7B** (Microsoft's agentic vision model) to understand web pages:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  Goal → Fara → Action → Result                                      │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  1. BrowserDriver.act("click the search button")                    │
+│  2. → Screenshot captured                                           │
+│  3. → Fara analyzes screenshot + goal                               │
+│  4. → Returns FaraToolCall{action="left_click", coordinate=(624,280)}│
+│  5. → PlaywrightExecutor.execute() runs the action                  │
+│  6. → Result returned to caller                                     │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+This replaces brittle CSS selectors with natural language descriptions.
+
+### Supported Actions
+
+| Action | Description |
+|--------|-------------|
+| `left_click` | Click at coordinates |
+| `double_click` | Double-click at coordinates |
+| `type` | Type text (optionally at coordinates) |
+| `scroll` | Scroll page up/down |
+| `key` | Press keyboard keys |
+| `visit_url` | Navigate to URL |
+| `terminate` | Task complete signal (agent mode) |
+| `wait` | Wait for page to load |
 
 ## Installation
 
@@ -159,6 +195,11 @@ FARA_MODEL_IDS="microsoft_fara-7b,fara-7b-gguf,gao-zijian/fara-7b"
 FARA_MAX_FAILURES=2
 FARA_PROBE_TIMEOUT=2.0
 
+# ADR-005: Confidence and Agent Mode
+FARA_MIN_CONFIDENCE=0.7           # Retry threshold (0.0-1.0)
+FARA_CONFIDENCE_RETRIES=2         # Max retries for low confidence
+FARA_MAX_AGENT_STEPS=20           # Max steps in autonomous mode
+
 # Alternative: Single OpenAI-compatible endpoint
 OPENAI_API_KEY=lm-studio
 OPENAI_BASE_URL=http://localhost:1234/v1
@@ -240,15 +281,18 @@ Behavior:
 | `type` | Type into element by description |
 | `scroll` | Scroll page up/down |
 | `wait` | Wait for element or delay |
+| `act` | Direct Fara execution - Fara decides the action (ADR-005) |
+| `act_autonomous` | Multi-step autonomous execution until task complete |
 
 ## Architecture
 
 See [docs/](docs/) for architecture documentation and ADRs:
 
-- [ADR-001](docs/adr/ADR-001_Security_Controls.md): Security Controls
+- [ADR-001](docs/adr/ADR-001_Agentic_Browser_Security.md): Agentic Browser Security
 - [ADR-002](docs/adr/ADR-002_Strategy_Architecture.md): Strategy Architecture
 - [ADR-003](docs/adr/ADR-003_Fara_Test_Harness.md): Fara Test Harness
 - [ADR-004](docs/adr/ADR-004_Compact_Storage_State.md): Compact Storage State
+- [ADR-005](docs/adr/ADR-005_Direct_Fara_Execution.md): Direct Fara Execution Architecture
 
 ## Development
 

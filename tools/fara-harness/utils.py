@@ -7,9 +7,8 @@ Pure functions with no streamlit dependency - can be tested independently.
 import base64
 import io
 import json
-import re
 from pathlib import Path
-from typing import Optional, Tuple, Any
+from typing import Optional, Tuple
 
 from PIL import Image, ImageDraw
 
@@ -88,41 +87,26 @@ def parse_command(text: str) -> Tuple[str, str, Optional[str]]:
     """
     Parse user command into (action, target, extra).
 
-    Supports:
-    - locate "description"
-    - click "description"
-    - type "description" text to type
-    - goto url
-    - scroll up/down
+    Only handles navigation commands that don't need Fara.
+    Everything else goes to `act` and lets Fara decide.
     """
     text = text.strip()
+    lower = text.lower()
 
-    # goto url
-    if text.lower().startswith("goto "):
+    # goto url - direct navigation, no LLM needed
+    if lower.startswith("goto "):
         url = text[5:].strip()
+        # Auto-prepend https:// if no protocol specified
+        if url and not url.startswith(("http://", "https://")):
+            url = f"https://{url}"
         return ("goto", url, None)
 
-    # scroll direction
-    if text.lower().startswith("scroll "):
+    # scroll - could go to Fara, but simple enough to handle directly
+    if lower.startswith("scroll "):
         direction = text[7:].strip().lower()
         if direction not in ("up", "down"):
             direction = "down"
         return ("scroll", direction, None)
 
-    # locate "description"
-    match = re.match(r'locate\s+["\'](.+?)["\']', text, re.IGNORECASE)
-    if match:
-        return ("locate", match.group(1), None)
-
-    # click "description"
-    match = re.match(r'click\s+["\'](.+?)["\']', text, re.IGNORECASE)
-    if match:
-        return ("click", match.group(1), None)
-
-    # type "description" text
-    match = re.match(r'type\s+["\'](.+?)["\']\s+(.+)', text, re.IGNORECASE)
-    if match:
-        return ("type", match.group(1), match.group(2))
-
-    # Default: treat as locate
-    return ("locate", text, None)
+    # Everything else: let Fara decide what to do
+    return ("act", text, None)

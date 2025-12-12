@@ -98,8 +98,8 @@ class SessionManager:
 
     def __init__(
         self,
-        max_sessions: int = None,
-        timeout_seconds: int = None,
+        max_sessions: Optional[int] = None,
+        timeout_seconds: Optional[int] = None,
     ):
         self.max_sessions = max_sessions or int(
             os.environ.get("NAVIGATOR_MAX_SESSIONS", 10)

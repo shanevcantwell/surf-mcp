@@ -20,6 +20,31 @@ Sessions can contain multiple drivers (e.g., filesystem + browser), enabling cro
 ### Visual Grounding (Browser)
 The browser driver uses multimodal LLMs (Fara-7B via LM Studio, or Gemini/GPT-4V) to locate UI elements by natural language description instead of brittle CSS selectors.
 
+#### Fara Output Format (ADR-005)
+Fara returns tool_calls in this format:
+```json
+{
+  "name": "computer_use",
+  "arguments": {
+    "action": "left_click",
+    "coordinate": [624, 280],
+    "reasoning": "The search button is a blue element..."
+  }
+}
+```
+
+Available actions: `left_click`, `double_click`, `type`, `scroll`, `key`, `visit_url`, `terminate`, `wait`
+
+#### FaraToolCall Data Model
+The `FaraToolCall` dataclass preserves Fara's full action context:
+- `action`: Action type (left_click, type, scroll, etc.)
+- `coordinate`: (x, y) pixel coordinates
+- `text`: Text to type (for type action)
+- `direction`: Scroll direction (up/down)
+- `keys`: Keys to press (for key action)
+- `confidence`: Model confidence (0.0-1.0)
+- `reasoning`: Fara's chain-of-thought explanation
+
 ### Multi-Server LM Studio Support
 Supports multiple LM Studio instances across different GPUs/machines:
 - **Server Discovery**: Probes each server's `/v1/models` manifest
@@ -105,12 +130,33 @@ Commands return structured results with success/error fields. Never raise except
 
 ## Key Files
 
+### Core
 - `src/navigator_mcp/server.py` - MCP entrypoint
 - `src/navigator_mcp/session_manager.py` - Session lifecycle
+
+### Drivers
 - `src/navigator_mcp/drivers/base.py` - NavigatorDriver interface
-- `src/navigator_mcp/drivers/filesystem.py` - FileSystemDriver
+- `src/navigator_mcp/drivers/filesystem.py` - FileSystemDriver with sandbox enforcement
 - `src/navigator_mcp/drivers/browser.py` - BrowserDriver with visual grounding
-- `src/navigator_mcp/llm/` - Visual grounding LLM adapters (OpenAI/Gemini)
+- `src/navigator_mcp/drivers/playwright_executor.py` - Direct Fara action execution (ADR-005)
+- `src/navigator_mcp/drivers/agent_runner.py` - Autonomous multi-step execution (ADR-005)
+
+### LLM Adapters
+- `src/navigator_mcp/llm/base.py` - VisualGrounder ABC, FaraToolCall dataclass
+- `src/navigator_mcp/llm/openai_adapter.py` - OpenAI/LM Studio visual grounder
+- `src/navigator_mcp/llm/gemini_adapter.py` - Google Gemini visual grounder
+- `src/navigator_mcp/llm/factory.py` - FailoverGrounder with multi-server support
+- `src/navigator_mcp/llm/lmstudio_discovery.py` - Multi-server LM Studio discovery
+- `src/navigator_mcp/llm/json_utils.py` - JSON extraction from LLM responses
+
+### Utilities
+- `src/navigator_mcp/commands/utils.py` - Shared driver retrieval and validation
+- `scripts/summarize_tests.py` - Generate test suite summary
+
+### Test Harness
+- `tools/fara-harness/app.py` - Streamlit UI for Fara testing
+- `tools/fara-harness/mcp_client.py` - MCP client wrapper
+- `tools/fara-harness/utils.py` - Command parsing and image utilities
 
 ---
 
@@ -144,3 +190,5 @@ Commands return structured results with success/error fields. Never raise except
 - `type` - Type into element by description
 - `scroll` - Scroll page
 - `wait` - Wait for element or delay
+- `act` - Direct Fara execution (Fara decides the action) (ADR-005)
+- `act_autonomous` - Multi-step autonomous execution (ADR-005)

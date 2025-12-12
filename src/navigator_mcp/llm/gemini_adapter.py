@@ -5,17 +5,22 @@ Uses Google's Gemini vision models for visual grounding.
 Alternative to the OpenAI adapter when using Gemini API directly.
 """
 
+from __future__ import annotations
+
 import base64
 import io
 import json
 import logging
 import os
 import re
-from typing import Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Tuple
 
 from PIL import Image
 
-from .base import LocateResult, VisualGrounder
+from .base import FaraToolCall, LocateResult, VisualGrounder
+
+if TYPE_CHECKING:
+    from google.generativeai import GenerativeModel
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +48,9 @@ class GeminiVisualGrounder(VisualGrounder):
         self.model = model or os.environ.get(
             "NAVIGATOR_LLM_MODEL", "gemini-2.0-flash"
         )
-        self._client = None
+        self._client: Optional[Any] = None  # GenerativeModel type
 
-    def _get_client(self):
+    def _get_client(self) -> Any:
         """Get or create Gemini client."""
         if self._client is None:
             try:
@@ -91,6 +96,30 @@ IMPORTANT: Return ONLY the JSON object, no markdown or explanation."""
     async def verify(self, description: str, screenshot_b64: str) -> LocateResult:
         """Verify element exists."""
         return await self.locate(description, screenshot_b64)
+
+    async def get_action(self, goal: str, screenshot_b64: str) -> FaraToolCall:
+        """
+        Get the action to perform based on goal and screenshot.
+
+        Note: Gemini adapter uses a simplified approach - it locates the element
+        and returns a click action. For full agentic behavior, use OpenAIVisualGrounder
+        with Fara-7B.
+        """
+        result = await self.locate(goal, screenshot_b64)
+
+        if result.found and result.x is not None and result.y is not None:
+            return FaraToolCall(
+                action="left_click",
+                coordinate=(result.x, result.y),
+                confidence=result.confidence or 0.0,
+                reasoning=result.reasoning or "",
+            )
+
+        return FaraToolCall(
+            action="terminate",
+            confidence=0.0,
+            reasoning=result.reasoning or "Element not found",
+        )
 
     async def _invoke_vision(self, prompt: str, image_b64: str) -> LocateResult:
         """Call Gemini vision API and parse response."""

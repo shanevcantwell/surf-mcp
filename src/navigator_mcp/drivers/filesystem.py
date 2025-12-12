@@ -56,6 +56,24 @@ class FileSystemDriver(NavigatorDriver):
 
         logger.info(f"FileSystemDriver initialized: root={self.root}, sandbox={sandbox}")
 
+    def _is_in_sandbox(self, path: Path) -> bool:
+        """Check if path is within sandbox boundary."""
+        if not self.sandbox:
+            return True
+        try:
+            path.relative_to(self.root)
+            return True
+        except ValueError:
+            return False
+
+    def _sandbox_error(self, action: str) -> NavigatorState:
+        """Return NavigatorState error for sandbox violation."""
+        return NavigatorState(
+            location=str(self.cwd),
+            success=False,
+            error=f"Cannot {action} outside sandbox: {self.root}",
+        )
+
     async def goto(self, location: str) -> NavigatorState:
         """
         Change directory (relative or absolute).
@@ -68,16 +86,8 @@ class FileSystemDriver(NavigatorDriver):
         """
         target = (self.cwd / location).resolve()
 
-        # Sandbox check
-        if self.sandbox:
-            try:
-                target.relative_to(self.root)
-            except ValueError:
-                return NavigatorState(
-                    location=str(self.cwd),
-                    success=False,
-                    error=f"Cannot navigate outside sandbox: {self.root}",
-                )
+        if not self._is_in_sandbox(target):
+            return self._sandbox_error("navigate")
 
         if not target.exists():
             return NavigatorState(
@@ -187,12 +197,8 @@ class FileSystemDriver(NavigatorDriver):
 
         path = (self.cwd / target).resolve()
 
-        # Sandbox check
-        if self.sandbox:
-            try:
-                path.relative_to(self.root)
-            except ValueError:
-                raise ValueError(f"Cannot read outside sandbox: {self.root}")
+        if not self._is_in_sandbox(path):
+            raise ValueError(f"Cannot read outside sandbox: {self.root}")
 
         if not path.is_file():
             raise ValueError(f"Cannot read: {path} is not a file")
@@ -216,16 +222,8 @@ class FileSystemDriver(NavigatorDriver):
         """
         path = (self.cwd / target).resolve()
 
-        # Sandbox check
-        if self.sandbox:
-            try:
-                path.relative_to(self.root)
-            except ValueError:
-                return NavigatorState(
-                    location=str(self.cwd),
-                    success=False,
-                    error=f"Cannot write outside sandbox: {self.root}",
-                )
+        if not self._is_in_sandbox(path):
+            return self._sandbox_error("write")
 
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -257,16 +255,8 @@ class FileSystemDriver(NavigatorDriver):
         """
         path = (self.cwd / target).resolve()
 
-        # Sandbox check
-        if self.sandbox:
-            try:
-                path.relative_to(self.root)
-            except ValueError:
-                return NavigatorState(
-                    location=str(self.cwd),
-                    success=False,
-                    error=f"Cannot delete outside sandbox: {self.root}",
-                )
+        if not self._is_in_sandbox(path):
+            return self._sandbox_error("delete")
 
         try:
             if path.is_file():
@@ -309,17 +299,8 @@ class FileSystemDriver(NavigatorDriver):
         src_path = (self.cwd / source).resolve()
         dst_path = (self.cwd / destination).resolve()
 
-        # Sandbox check
-        if self.sandbox:
-            for path in [src_path, dst_path]:
-                try:
-                    path.relative_to(self.root)
-                except ValueError:
-                    return NavigatorState(
-                        location=str(self.cwd),
-                        success=False,
-                        error=f"Cannot copy outside sandbox: {self.root}",
-                    )
+        if not self._is_in_sandbox(src_path) or not self._is_in_sandbox(dst_path):
+            return self._sandbox_error("copy")
 
         try:
             if src_path.is_file():
@@ -360,17 +341,8 @@ class FileSystemDriver(NavigatorDriver):
         src_path = (self.cwd / source).resolve()
         dst_path = (self.cwd / destination).resolve()
 
-        # Sandbox check
-        if self.sandbox:
-            for path in [src_path, dst_path]:
-                try:
-                    path.relative_to(self.root)
-                except ValueError:
-                    return NavigatorState(
-                        location=str(self.cwd),
-                        success=False,
-                        error=f"Cannot move outside sandbox: {self.root}",
-                    )
+        if not self._is_in_sandbox(src_path) or not self._is_in_sandbox(dst_path):
+            return self._sandbox_error("move")
 
         try:
             dst_path.parent.mkdir(parents=True, exist_ok=True)
@@ -404,12 +376,8 @@ class FileSystemDriver(NavigatorDriver):
 
         matches = []
         for path in self.cwd.glob(pattern):
-            # Sandbox check
-            if self.sandbox:
-                try:
-                    path.relative_to(self.root)
-                except ValueError:
-                    continue
+            if not self._is_in_sandbox(path):
+                continue
 
             rel_path = path.relative_to(self.cwd)
             matches.append(str(rel_path))

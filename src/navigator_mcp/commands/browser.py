@@ -7,6 +7,8 @@ Operations specific to the browser driver (visual grounding):
 - type: Type into element by description
 - scroll: Scroll page
 - wait: Wait for element or delay
+- act: Direct Fara execution (ADR-005)
+- act_autonomous: Autonomous multi-step execution (ADR-005)
 """
 
 from typing import Any, Dict, List
@@ -149,6 +151,51 @@ def get_tools() -> List[Tool]:
                 "required": ["session_id", "driver"],
             },
         ),
+        # ADR-005: Direct Fara Execution
+        Tool(
+            name="act",
+            description="Execute a goal using direct Fara visual grounding. Fara decides what action to take (click, type, scroll, etc.) based on the goal and screenshot.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "Session ID",
+                    },
+                    "driver": {
+                        "type": "string",
+                        "description": "Driver alias (must be browser)",
+                    },
+                    "goal": {
+                        "type": "string",
+                        "description": "Natural language goal (e.g., 'click the search button', 'type hello into the email field')",
+                    },
+                },
+                "required": ["session_id", "driver", "goal"],
+            },
+        ),
+        Tool(
+            name="act_autonomous",
+            description="Execute a goal autonomously with multiple steps. Fara loops until task completion (terminate action) or max steps reached.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "session_id": {
+                        "type": "string",
+                        "description": "Session ID",
+                    },
+                    "driver": {
+                        "type": "string",
+                        "description": "Driver alias (must be browser)",
+                    },
+                    "goal": {
+                        "type": "string",
+                        "description": "Natural language goal to achieve autonomously",
+                    },
+                },
+                "required": ["session_id", "driver", "goal"],
+            },
+        ),
     ]
 
 
@@ -242,3 +289,36 @@ async def wait(manager: SessionManager, args: Dict[str, Any]) -> Dict[str, Any]:
 
     result = await driver.wait(description=description, seconds=seconds)
     return result.model_dump()
+
+
+# ============ ADR-005: Direct Fara Execution ============
+
+
+async def act(manager: SessionManager, args: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute goal using direct Fara execution."""
+    driver, error = await _get_browser_driver(manager, args)
+    if error:
+        return error
+
+    goal = args.get("goal")
+    if not goal:
+        return {"error": "goal required"}
+
+    result = await driver.act(goal)
+    return result.model_dump()
+
+
+async def act_autonomous(manager: SessionManager, args: Dict[str, Any]) -> Dict[str, Any]:
+    """Execute goal autonomously with multi-step Fara loop."""
+    driver, error = await _get_browser_driver(manager, args)
+    if error:
+        return error
+
+    goal = args.get("goal")
+    if not goal:
+        return {"error": "goal required"}
+
+    # Note: progress_callback is not wired up here yet.
+    # Future: Wire MCP progress notifications when supported.
+    result = await driver.act_autonomous(goal=goal)
+    return result

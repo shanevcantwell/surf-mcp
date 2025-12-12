@@ -13,6 +13,8 @@ Security Controls (ADR-001 Phase 1):
 - Rate Limiting
 """
 
+from __future__ import annotations
+
 import base64
 import logging
 import os
@@ -21,6 +23,8 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from .base import HistoryEntry, NavigatorDriver, NavigatorState
+from .playwright_executor import PlaywrightExecutor
+from ..llm.base import FaraToolCall
 from ..security.audit import AuditEvent, AuditLogger
 from ..security.domain_filter import DomainFilter
 from ..security.rate_limiter import RateLimiter
@@ -28,6 +32,7 @@ from ..security.rate_limiter import RateLimiter
 if TYPE_CHECKING:
     from playwright.async_api import Browser, Page, Playwright
     from ..llm.base import VisualGrounder
+    from .agent_runner import AgentRunner
 
 logger = logging.getLogger(__name__)
 
@@ -50,8 +55,8 @@ class BrowserDriver(NavigatorDriver):
     def __init__(
         self,
         headless: bool = True,
-        viewport: tuple = (1920, 1080),
-        visual_grounder: Optional["VisualGrounder"] = None,
+        viewport: tuple[int, int] = (1920, 1080),
+        visual_grounder: Optional[VisualGrounder] = None,
         storage_state: Optional[Dict[str, Any]] = None,
         # Security controls (ADR-001 Phase 1)
         allowed_domains: Optional[List[str]] = None,
@@ -96,6 +101,9 @@ class BrowserDriver(NavigatorDriver):
         )
         self.rate_limiter = RateLimiter(max_per_minute=max_actions_per_minute)
         self._last_screenshot_b64: Optional[str] = None
+
+        # ADR-005: Direct Fara Execution (with domain filter for visit_url security)
+        self._executor = PlaywrightExecutor(domain_filter=self._domain_filter)
 
     @property
     def audit_log(self) -> List[AuditEvent]:
@@ -354,6 +362,229 @@ class BrowserDriver(NavigatorDriver):
         screenshot = await self.snapshot()
         result = await self.grounder.locate(description, screenshot)
         return result.model_dump()
+
+    # ============ ADR-005: Direct Fara Execution ============
+
+    async def act(self, goal: str) -> NavigatorState:
+        """
+        Execute a goal using direct Fara execution.
+
+        Per ADR-005: Fara decides what action to take, we just execute it.
+        This is the new unified method for all visual grounding actions.
+
+        Args:
+            goal: Natural language goal (e.g., "click the search button",
+                  "type 'hello' into the email field")
+
+        Returns:
+            NavigatorState with success status and post-action screenshot
+        """
+        if not self._page:
+            return NavigatorState(
+                location="",
+                success=False,
+                error="Browser not initialized",
+            )
+
+        if not self.grounder:
+            return NavigatorState(
+                location=self._page.url,
+                success=False,
+                error="Visual grounder not configured",
+            )
+
+        # Security check: Rate limiting (ADR-001 Phase 1)
+        if not self.rate_limiter.allow():
+            self._audit_logger.log(
+                action="act",
+                details={"goal": goal},
+                outcome="rate_limited",
+            )
+            return NavigatorState(
+                location=self._page.url,
+                success=False,
+                error="Rate limit exceeded. Too many actions per minute.",
+            )
+
+        # Get screenshot
+        screenshot = await self.snapshot()
+
+        # Get action from Fara
+        try:
+            if hasattr(self.grounder, "get_action_with_retry"):
+                tool_call = await self.grounder.get_action_with_retry(goal, screenshot)
+            elif hasattr(self.grounder, "get_action"):
+                tool_call = await self.grounder.get_action(goal, screenshot)
+            else:
+                # Fallback to legacy locate for grounders without get_action
+                return await self._act_via_locate(goal)
+        except Exception as e:
+            logger.error(f"Fara failed for goal '{goal}': {e}")
+            self._audit_logger.log(
+                action="act",
+                details={"goal": goal, "error": str(e)},
+                outcome="failed",
+            )
+            return NavigatorState(
+                location=self._page.url,
+                success=False,
+                error=f"Visual grounding failed: {e}",
+            )
+
+        # Audit log with full context
+        self._audit_logger.log(
+            action="act",
+            details={
+                "goal": goal,
+                "fara_action": tool_call.action,
+                "coordinate": tool_call.coordinate,
+                "confidence": tool_call.confidence,
+            },
+            outcome="executing",
+            screenshot_b64=self._last_screenshot_b64,
+        )
+
+        # Execute the action
+        try:
+            result = await self._executor.execute(tool_call, self._page)
+        except Exception as e:
+            logger.error(f"Execution failed for {tool_call.action}: {e}")
+            self._audit_logger.log(
+                action="act",
+                details={"goal": goal, "error": str(e)},
+                outcome="execution_failed",
+            )
+            return NavigatorState(
+                location=self._page.url,
+                success=False,
+                error=f"Action execution failed: {e}",
+            )
+
+        if not result.success:
+            self._audit_logger.log(
+                action="act",
+                details={"goal": goal, "error": result.error},
+                outcome="failed",
+            )
+            return NavigatorState(
+                location=self._page.url,
+                success=False,
+                error=result.error,
+            )
+
+        # Wait for page to settle
+        try:
+            await self._page.wait_for_load_state("networkidle", timeout=5000)
+        except Exception:
+            pass  # Timeout is ok, page might not navigate
+
+        self._audit_logger.log(
+            action="act",
+            details={"goal": goal, "executed_action": tool_call.action},
+            outcome="success",
+        )
+
+        return NavigatorState(
+            location=self._page.url,
+            success=True,
+            snapshot=await self.snapshot(),
+        )
+
+    async def _act_via_locate(self, goal: str) -> NavigatorState:
+        """
+        Fallback for grounders without get_action method.
+
+        Uses legacy locate() to find coordinates, then clicks.
+        """
+        locate_result = await self.locate(goal)
+
+        if not locate_result.get("found"):
+            return NavigatorState(
+                location=self._page.url if self._page else "",
+                success=False,
+                error=f"Element not found: {goal}",
+            )
+
+        x, y = locate_result["x"], locate_result["y"]
+
+        try:
+            if self._page:
+                await self._page.mouse.click(x, y)
+                await self._page.wait_for_load_state("networkidle", timeout=5000)
+        except Exception:
+            pass
+
+        return NavigatorState(
+            location=self._page.url if self._page else "",
+            success=True,
+            snapshot=await self.snapshot(),
+        )
+
+    async def act_autonomous(
+        self,
+        goal: str,
+        progress_callback: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Execute a goal autonomously until complete.
+
+        Per ADR-005: Runs Fara in a loop until it signals task complete
+        (terminate action) or max steps reached.
+
+        Args:
+            goal: Natural language goal to achieve
+            progress_callback: Optional async callback(step, total, message)
+
+        Returns:
+            Dict with success, steps, final_screenshot, reason
+        """
+        if not self._page:
+            return {
+                "success": False,
+                "error": "Browser not initialized",
+                "steps": [],
+            }
+
+        if not self.grounder:
+            return {
+                "success": False,
+                "error": "Visual grounder not configured",
+                "steps": [],
+            }
+
+        # Import here to avoid circular imports
+        from .agent_runner import AgentRunner
+
+        runner = AgentRunner(
+            grounder=self.grounder,
+            executor=self._executor,
+        )
+
+        result = await runner.run(
+            goal=goal,
+            page=self._page,
+            screenshot_fn=self.snapshot,
+            progress_callback=progress_callback,
+        )
+
+        return {
+            "success": result.success,
+            "step_count": result.step_count,
+            "steps": [
+                {
+                    "step": s.step_number,
+                    "action": s.tool_call.action,
+                    "coordinate": s.tool_call.coordinate,
+                    "confidence": s.tool_call.confidence,
+                    "reasoning": s.tool_call.reasoning,
+                    "execution_success": s.execution_result.success,
+                    "execution_error": s.execution_result.error,
+                }
+                for s in result.steps
+            ],
+            "final_screenshot": result.final_screenshot_b64,
+            "reason": result.reason,
+        }
 
     async def click(self, description: str) -> NavigatorState:
         """

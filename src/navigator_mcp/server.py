@@ -123,6 +123,12 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
         elif name == "wait":
             result = await browser.wait(session_manager, arguments)
 
+        # ADR-005: Direct Fara Execution
+        elif name == "act":
+            result = await browser.act(session_manager, arguments)
+        elif name == "act_autonomous":
+            result = await browser.act_autonomous(session_manager, arguments)
+
         else:
             result = {"error": f"Unknown tool: {name}"}
 

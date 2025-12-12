@@ -129,37 +129,14 @@ class TestStorageStateRoundTrip:
 
 
 class TestCommandParsing:
-    """Test command parsing logic from utils.py."""
+    """Test command parsing logic from utils.py.
 
-    def test_parse_locate(self):
-        """Parse locate command."""
-        from utils import parse_command
-
-        action, target, extra = parse_command('locate "the search button"')
-        assert action == "locate"
-        assert target == "the search button"
-        assert extra is None
-
-    def test_parse_click(self):
-        """Parse click command."""
-        from utils import parse_command
-
-        action, target, extra = parse_command('click "Sign in"')
-        assert action == "click"
-        assert target == "Sign in"
-        assert extra is None
-
-    def test_parse_type(self):
-        """Parse type command."""
-        from utils import parse_command
-
-        action, target, extra = parse_command('type "email field" user@example.com')
-        assert action == "type"
-        assert target == "email field"
-        assert extra == "user@example.com"
+    The parser is intentionally minimal - only goto and scroll are handled
+    directly. Everything else goes to Fara via 'act'.
+    """
 
     def test_parse_goto(self):
-        """Parse goto command."""
+        """Parse goto command - direct navigation."""
         from utils import parse_command
 
         action, target, extra = parse_command("goto https://google.com")
@@ -167,8 +144,17 @@ class TestCommandParsing:
         assert target == "https://google.com"
         assert extra is None
 
+    def test_parse_goto_auto_https(self):
+        """Parse goto without protocol - auto-prepends https://"""
+        from utils import parse_command
+
+        action, target, extra = parse_command("goto google.com")
+        assert action == "goto"
+        assert target == "https://google.com"
+        assert extra is None
+
     def test_parse_scroll(self):
-        """Parse scroll command."""
+        """Parse scroll command - direct scroll."""
         from utils import parse_command
 
         action, target, extra = parse_command("scroll down")
@@ -179,13 +165,25 @@ class TestCommandParsing:
         assert action == "scroll"
         assert target == "up"
 
-    def test_parse_default_locate(self):
-        """Unparseable command defaults to locate."""
+    def test_parse_natural_language_goes_to_act(self):
+        """Natural language commands go to Fara via 'act'."""
         from utils import parse_command
 
-        action, target, extra = parse_command("the blue button")
-        assert action == "locate"
-        assert target == "the blue button"
+        # All these should become "act" - let Fara decide
+        test_cases = [
+            "click the search button",
+            "Click on Sign in",
+            "type hello into the search box",
+            "press enter",
+            "find the submit button",
+            "the blue button",
+            'Enter "test" into the input',
+        ]
+
+        for cmd in test_cases:
+            action, target, extra = parse_command(cmd)
+            assert action == "act", f"Expected 'act' for '{cmd}', got '{action}'"
+            assert target == cmd, f"Target should be original command"
 
 
 class TestOverlayDrawing:
@@ -241,7 +239,7 @@ class TestMCPServerIntegration:
             )
             return True
         except (subprocess.TimeoutExpired, FileNotFoundError):
-            pytest.skip("navigator-mcp not available")
+            pytest.skip("ENVIRONMENT: Requires 'pip install -e .' (navigator-mcp not on PATH)")
 
     @pytest.mark.asyncio
     async def test_client_connect_disconnect(self, check_server_available):
@@ -327,7 +325,7 @@ class TestBrowserIntegration:
                 browser.close()
             return True
         except Exception as e:
-            pytest.skip(f"Playwright chromium not available: {e}")
+            pytest.skip(f"ENVIRONMENT: Requires 'playwright install chromium' ({e})")
 
     @pytest.mark.asyncio
     async def test_browser_session_with_storage_state(
@@ -350,7 +348,7 @@ class TestBrowserIntegration:
 
             # Navigate to a page
             goto_result = await client.goto(session_id, "https://example.com")
-            assert "error" not in goto_result
+            assert not goto_result.get("error"), f"Navigation failed: {goto_result.get('error')}"
 
             # Destroy and capture storage_state
             destroy_result = await client.session_destroy(session_id)
@@ -398,14 +396,16 @@ class TestBrowserIntegration:
 
 
 @pytest.mark.integration
-@pytest.mark.skip(reason="SyncClient disconnect fails due to anyio task affinity - works in real Streamlit")
+@pytest.mark.skip(reason="FRAMEWORK: disconnect() fails in pytest due to anyio task affinity - operations work, only cleanup fails")
 class TestSyncClientIntegration:
     """Integration tests using the sync wrapper (as Streamlit would).
 
-    Note: These tests are skipped because anyio's task groups have strict
-    task affinity - they must be entered/exited from the same task. In pytest's
-    async context, disconnect() fails. In actual Streamlit usage, the client
-    stays alive across reruns and subprocess cleanup handles disconnect.
+    These tests are skipped because anyio task groups require exit from the same
+    task as entry. In pytest, connect() and disconnect() run in different task
+    contexts, causing "Attempted to exit cancel scope in different task" error.
+
+    The actual operations WORK - only the cleanup fails. In production Streamlit,
+    the client stays alive across reruns and process exit handles cleanup.
     """
 
     @pytest.fixture
@@ -421,7 +421,7 @@ class TestSyncClientIntegration:
             )
             return True
         except (subprocess.TimeoutExpired, FileNotFoundError):
-            pytest.skip("navigator-mcp not available")
+            pytest.skip("ENVIRONMENT: Requires 'pip install -e .' (navigator-mcp not on PATH)")
 
     def test_sync_client_connect_disconnect(self, check_server_available):
         """Test sync client connect/disconnect cycle."""
@@ -506,7 +506,7 @@ class TestFullBrowserWorkflow:
                 browser.close()
             return True
         except Exception as e:
-            pytest.skip(f"Playwright chromium not available: {e}")
+            pytest.skip(f"ENVIRONMENT: Requires 'playwright install chromium' ({e})")
 
     @pytest.mark.asyncio
     async def test_full_navigation_workflow(self, check_playwright_available):

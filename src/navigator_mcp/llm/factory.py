@@ -223,3 +223,52 @@ class FailoverGrounder(VisualGrounder):
     async def verify(self, description: str, screenshot_b64: str) -> LocateResult:
         """Verify element exists (uses locate)."""
         return await self.locate(description, screenshot_b64)
+
+    async def get_action(self, goal: str, screenshot_b64: str) -> "FaraToolCall":
+        """
+        Get action with automatic failover.
+
+        Tries each server/model combination until success or max_failures reached.
+        """
+        from .base import FaraToolCall
+
+        failures = 0
+        last_error = None
+
+        # Reset for this request
+        self._current_server_idx = 0
+        self._current_model_idx = 0
+
+        while failures < self.max_failures:
+            config = self._get_next_config()
+            if config is None:
+                # Exhausted all servers, wrap around
+                self._current_server_idx = 0
+                self._current_model_idx = 0
+                config = self._get_next_config()
+
+            server_url, model_id = config
+
+            try:
+                adapter = self._create_adapter(server_url, model_id)
+                result = await adapter.get_action(goal, screenshot_b64)
+
+                # Success - cache this adapter for future calls
+                self._adapter = adapter
+                return result
+
+            except Exception as e:
+                failures += 1
+                last_error = e
+                logger.warning(
+                    f"Failover: attempt {failures}/{self.max_failures} failed "
+                    f"on {server_url} with {model_id}: {e}"
+                )
+
+        # All retries exhausted
+        logger.error(f"Failover: all {self.max_failures} attempts failed")
+        return FaraToolCall(
+            action="terminate",
+            confidence=0.0,
+            reasoning=f"All servers failed after {failures} attempts. Last error: {last_error}",
+        )
