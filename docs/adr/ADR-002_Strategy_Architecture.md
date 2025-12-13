@@ -159,9 +159,16 @@ class AdaptiveStrategy:
 
 ## References
 
-- [ADR-001: Agentic Browser Security](./ADR-001_Agentic_Browser_Security.md)
+- [ADR-001: Agentic Browser Security](./ADR-001_Agentic_Browser_Security.md) - Security controls (Phase 1 complete)
 - [Playwright Storage State](https://playwright.dev/docs/auth)
-- LAS FaraService implementation
+
+## Dependencies
+
+This ADR depends on:
+- **ADR-001 Session/Credential Separation** (implemented): navigator-mcp is stateless; client agents own credentials
+- **ADR-005 Direct Fara Execution** (complete, archived): Fara decides actions via `act()` method
+
+Current implementation provides foundation for strategies via `BrowserDriver.act(goal)` - strategies would provide site-specific guidance to improve Fara accuracy.
 
 ---
 

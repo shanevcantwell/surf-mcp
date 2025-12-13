@@ -1,7 +1,8 @@
 # ADR-003: Fara Visual Grounding Test Harness
 
-**Status:** Proposed
+**Status:** Complete
 **Date:** 2025-12-10
+**Completed:** 2025-12-13
 **Authors:** Shane Cantwell, Claude
 
 ---
@@ -186,4 +187,10 @@ if st.button("Go") and prompt:
 
 ## Decision Outcome
 
-**Proposed** - Build this before diving deeper into strategy patterns. Hands-on experience with Fara will inform better abstractions.
+**Complete** - Harness implemented in `tools/fara-harness/` using Streamlit as recommended. Key learnings:
+
+1. **Fara as agent**: Led to ADR-005 (Direct Fara Execution) - Fara decides actions, not just coordinates
+2. **No command parsing**: User input goes directly to Fara without manipulation (harness doesn't interpret)
+3. **MCP-only access**: Harness communicates via MCP, never imports navigator-mcp directly
+
+Current architecture documented in CLAUDE.md under "Test Harness" section.

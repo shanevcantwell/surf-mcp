@@ -109,6 +109,13 @@ Current priority is the Fara test harness (ADR-003), which uses direct MCP calls
 
 ## References
 
-- [ADR-002: Strategy Architecture](./ADR-002_Strategy_Architecture.md) - Session/credential separation
-- [ADR-003: Fara Test Harness](./ADR-003_Fara_Test_Harness.md) - Test harness design
+- [ADR-002: Strategy Architecture](./ADR-002_Strategy_Architecture.md) - Session/credential separation (proposed)
 - [Playwright Storage State](https://playwright.dev/docs/auth)
+
+## Dependencies
+
+This ADR depends on:
+- **ADR-003 Fara Test Harness** (complete, archived): Harness uses direct MCP calls where token cost doesn't matter
+- **LAS integration**: Revisit when LLM agent orchestration is active and token usage is measurable
+
+Currently deferred - the harness validates storage_state round-trip works; compact format is an optimization for when LLM agents manage browser sessions.

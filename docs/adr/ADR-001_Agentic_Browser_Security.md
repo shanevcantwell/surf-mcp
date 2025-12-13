@@ -1,8 +1,20 @@
 # ADR-001: Agentic Browser Security Controls
 
-**Status:** Proposed
+**Status:** Accepted (Phase 1 Complete)
 **Date:** 2025-12-08
+**Updated:** 2025-12-13
 **Authors:** Shane Cantwell, Claude
+
+---
+
+## Implementation Status
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| **Phase 1** | ✅ Complete | Domain filter, audit logging, rate limiting |
+| **Phase 1.5** | ⏳ Not started | Squid proxy (Docker infrastructure) |
+| **Phase 2** | ⏳ Not started | Sensitive action confirmation, screenshot sanitization |
+| **Phase 3** | ⏳ Not started | Behavioral anomaly detection, session recording |
 
 ---
 

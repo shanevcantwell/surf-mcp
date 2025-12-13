@@ -1,8 +1,25 @@
 # ADR-005: Direct Fara Execution Architecture
 
-**Status:** Accepted
+**Status:** Complete
 **Date:** 2025-12-11
+**Completed:** 2025-12-13
 **Authors:** Shane Cantwell, Claude
+
+---
+
+## Implementation Status
+
+All components implemented:
+
+| Component | File | Status |
+|-----------|------|--------|
+| `FaraToolCall` dataclass | `src/navigator_mcp/llm/base.py` | ✅ |
+| `PlaywrightExecutor` | `src/navigator_mcp/drivers/playwright_executor.py` | ✅ |
+| `AgentRunner` | `src/navigator_mcp/drivers/agent_runner.py` | ✅ |
+| `get_action()` method | `src/navigator_mcp/llm/openai_adapter.py` | ✅ |
+| `BrowserDriver.act()` | `src/navigator_mcp/drivers/browser.py` | ✅ |
+
+Migration complete - new flow is primary, old `locate()` path still available for compatibility.
 
 ---
 
