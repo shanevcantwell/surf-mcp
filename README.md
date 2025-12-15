@@ -89,11 +89,25 @@ Add to your MCP client configuration:
 }
 ```
 
-### Docker
+### Docker (Standalone)
+
+Build and run as a standalone container:
 
 ```bash
+# Build the image
+docker build -t navigator-mcp .
+
+# Run with LM Studio on host (default)
+docker run -it --rm \
+  --add-host=host.docker.internal:host-gateway \
+  -e LMSTUDIO_SERVERS="default=http://host.docker.internal:1234/v1" \
+  navigator-mcp
+
+# Or use docker-compose (recommended)
 docker-compose up -d
 ```
+
+The container uses `host.docker.internal` to reach LM Studio running on your host machine.
 
 ### Fara Test Harness
 
@@ -288,11 +302,14 @@ Behavior:
 
 See [docs/](docs/) for architecture documentation and ADRs:
 
-- [ADR-001](docs/adr/ADR-001_Agentic_Browser_Security.md): Agentic Browser Security
-- [ADR-002](docs/adr/ADR-002_Strategy_Architecture.md): Strategy Architecture
-- [ADR-003](docs/adr/ADR-003_Fara_Test_Harness.md): Fara Test Harness
-- [ADR-004](docs/adr/ADR-004_Compact_Storage_State.md): Compact Storage State
-- [ADR-005](docs/adr/ADR-005_Direct_Fara_Execution.md): Direct Fara Execution Architecture
+**Active ADRs:**
+- [ADR-001](docs/adr/ADR-001_Agentic_Browser_Security.md): Agentic Browser Security (Phase 1 Complete)
+- [ADR-002](docs/adr/ADR-002_Strategy_Architecture.md): Strategy Architecture (Proposed)
+- [ADR-004](docs/adr/ADR-004_Compact_Storage_State.md): Compact Storage State (Deferred)
+
+**Completed ADRs:**
+- [ADR-003](docs/adr/complete/ADR-003_Fara_Test_Harness.md): Fara Test Harness
+- [ADR-005](docs/adr/complete/ADR-005_Direct_Fara_Execution.md): Direct Fara Execution Architecture
 
 ## Development
 

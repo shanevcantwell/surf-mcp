@@ -6,12 +6,20 @@ services:
     stdin_open: true
     tty: true
     environment:
-      # LLM Configuration
+      # LM Studio / Fara Configuration (default: host machine)
+      # Use host.docker.internal to reach LM Studio on host
+      - LMSTUDIO_SERVERS=${LMSTUDIO_SERVERS:-default=http://host.docker.internal:1234/v1}
+      - FARA_MODEL_IDS=${FARA_MODEL_IDS:-microsoft_fara-7b}
+      - FARA_MAX_FAILURES=${FARA_MAX_FAILURES:-2}
+      - FARA_PROBE_TIMEOUT=${FARA_PROBE_TIMEOUT:-2.0}
+      - FARA_MIN_CONFIDENCE=${FARA_MIN_CONFIDENCE:-0.7}
+      - FARA_MAX_AGENT_STEPS=${FARA_MAX_AGENT_STEPS:-20}
+
+      # Alternative: Cloud LLM providers
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_API_BASE=${OPENAI_API_BASE:-}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - NAVIGATOR_LLM_PROVIDER=${NAVIGATOR_LLM_PROVIDER:-openai}
-      - NAVIGATOR_LLM_MODEL=${NAVIGATOR_LLM_MODEL:-gpt-4o}
 
       # Browser Configuration
       - NAVIGATOR_BROWSER_HEADLESS=true
@@ -25,9 +33,16 @@ services:
       # Filesystem Configuration
       - NAVIGATOR_FS_SANDBOX=true
 
+      # Logging
+      - NAVIGATOR_LOG_LEVEL=${NAVIGATOR_LOG_LEVEL:-INFO}
+
     volumes:
       # Mount workspace for filesystem operations
       - ./workspace:/workspace
+
+    # Enable host.docker.internal on Linux (works by default on Mac/Windows)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
     # For debugging, you can add:
     # ports:
