@@ -58,6 +58,11 @@ def parse_lmstudio_servers() -> Dict[str, str]:
     Format: "name1=url1,name2=url2" (uses = separator since URLs contain :)
     Example: "rtx3090=http://localhost:1234/v1,rtx8000=http://192.168.137.2:1234/v1"
 
+    NOTE: Server names (e.g., "rtx3090", "rtx8000") are cosmetic identifiers used
+    only for logging. Discovery probes ALL configured servers looking for ANY model
+    from FARA_MODEL_IDS. There is no per-server model mapping - all servers are
+    treated equivalently and the first server with a matching model wins.
+
     Returns:
         Dict mapping server names to URLs
     """

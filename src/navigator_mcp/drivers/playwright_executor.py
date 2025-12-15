@@ -134,6 +134,8 @@ class PlaywrightExecutor:
                             await new_page.wait_for_load_state("domcontentloaded", timeout=5000)
                         except Exception:
                             pass
+                        # Return new_page for auto-switch by BrowserDriver
+                        return ExecutionResult(success=True, action=action, new_page=new_page)
                     else:
                         # Wait for navigation on current page
                         try:

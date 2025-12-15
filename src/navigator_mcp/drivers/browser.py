@@ -460,6 +460,12 @@ class BrowserDriver(NavigatorDriver):
                 error=f"Action execution failed: {e}",
             )
 
+        # Handle new tab auto-switch (ADR decision: follow user intent to new tab)
+        if result.new_page:
+            old_url = self._page.url if self._page else "unknown"
+            self._page = result.new_page
+            logger.info(f"Auto-switched to new tab: {self._page.url} (from {old_url})")
+
         if not result.success:
             self._audit_logger.log(
                 action="act",

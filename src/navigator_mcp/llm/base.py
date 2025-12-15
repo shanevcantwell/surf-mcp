@@ -104,6 +104,9 @@ class ExecutionResult:
     error: Optional[str] = None
     """Error message if success=False."""
 
+    new_page: Optional[Any] = None
+    """New Playwright Page if click opened a new tab (for auto-switch)."""
+
 
 class VisualGrounder(ABC):
     """

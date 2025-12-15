@@ -213,24 +213,14 @@ Commands return structured results with success/error fields. Never raise except
 
 ---
 
-## Open Questions
+## Design Decisions
 
-### How should clicks that open new tabs be handled?
+### Multi-Tab Handling
 
-**Context:** Many sites (Google News, search results, etc.) use `target="_blank"` links. When Fara clicks these, the browser opens a new tab but the harness continues showing the original page.
+**Decision:** Auto-switch to new tab when click opens one.
 
-**Current behavior:** PlaywrightExecutor detects new tabs and waits for them to load, but doesn't switch the active page. The screenshot refresh shows the original tab.
+When a `target="_blank"` link opens a new tab, BrowserDriver automatically switches the active page to the new tab. This follows user intent for single-prompt single-action calls (e.g., "click the article" should show the article, not the original page).
 
-**Options to consider:**
+**Implementation:** PlaywrightExecutor returns `new_page` in ExecutionResult when a click opens a new tab. BrowserDriver updates `self._page` to the new tab and logs the switch.
 
-1. **Auto-switch to new tab** - When a click opens a new tab, automatically make it the active page for future operations. Pro: Follows user intent. Con: May lose context of original page.
-
-2. **Return new tab info in result** - Include `{"new_tab_opened": true, "new_tab_url": "..."}` in the action result so the caller can decide. Pro: Explicit control. Con: More complexity for caller.
-
-3. **Multi-tab awareness** - Add tab management commands (`list_tabs`, `switch_tab`, `close_tab`). Pro: Full control. Con: Significant new surface area.
-
-4. **Modifier for link behavior** - Add option like `{"follow_links_in_same_tab": true}` to force same-tab navigation. Pro: Predictable. Con: May not work with all sites/JS.
-
-5. **Let Fara handle it** - If user says "click the article and read it", Fara should recognize the new tab and operate there. Pro: Natural. Con: Requires Fara to understand multi-tab context.
-
-**Question:** What's the right abstraction? The Navigator model assumes "one location" - does multi-tab break that?
+**Risk:** Ad popups that open additional tabs. Mitigation: We switch to the most recent tab, which should be the intended content. Future: Could filter by URL patterns if needed.
