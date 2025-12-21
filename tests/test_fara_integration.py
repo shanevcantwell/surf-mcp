@@ -14,8 +14,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from PIL import Image
 
-from navigator_mcp.llm.openai_adapter import OpenAIVisualGrounder
-from navigator_mcp.llm.base import LocateResult
+from surf_mcp.llm.openai_adapter import OpenAIVisualGrounder
+from surf_mcp.llm.base import LocateResult
 
 
 def create_test_screenshot(width: int = 1920, height: int = 1080) -> str:

@@ -1,7 +1,7 @@
 """
 MCP Client wrapper for Fara Test Harness.
 
-Uses the official MCP SDK to communicate with navigator-mcp server
+Uses the official MCP SDK to communicate with surf-mcp server
 via subprocess stdio.
 """
 
@@ -16,9 +16,9 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 
-class NavigatorMCPClient:
+class SurfMCPClient:
     """
-    Client wrapper for navigator-mcp server.
+    Client wrapper for surf-mcp server.
 
     Handles subprocess lifecycle and provides typed methods for MCP tools.
     """
@@ -28,12 +28,12 @@ class NavigatorMCPClient:
         self.exit_stack: Optional[AsyncExitStack] = None
         self._connected = False
 
-    async def connect(self, server_command: str = "navigator-mcp") -> None:
+    async def connect(self, server_command: str = "surf-mcp") -> None:
         """
-        Connect to navigator-mcp server.
+        Connect to surf-mcp server.
 
         Args:
-            server_command: Command to start the server (default: navigator-mcp)
+            server_command: Command to start the server (default: surf-mcp)
         """
         if self._connected:
             return
@@ -60,7 +60,7 @@ class NavigatorMCPClient:
 
         # List available tools for debugging
         response = await self.session.list_tools()
-        print(f"Connected to navigator-mcp with tools: {[t.name for t in response.tools]}")
+        print(f"Connected to surf-mcp with tools: {[t.name for t in response.tools]}")
 
     async def disconnect(self) -> None:
         """Disconnect from server."""
@@ -249,7 +249,7 @@ class NavigatorMCPClient:
         })
 
 
-class SyncNavigatorClient:
+class SyncSurfClient:
     """
     Synchronous wrapper for Streamlit integration.
 
@@ -258,7 +258,7 @@ class SyncNavigatorClient:
     """
 
     def __init__(self):
-        self._client = NavigatorMCPClient()
+        self._client = SurfMCPClient()
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._setup_loop()
 
@@ -282,7 +282,7 @@ class SyncNavigatorClient:
             self._setup_loop()
         return self._loop.run_until_complete(coro)
 
-    def connect(self, server_command: str = "navigator-mcp") -> None:
+    def connect(self, server_command: str = "surf-mcp") -> None:
         self._run(self._client.connect(server_command))
 
     def disconnect(self) -> None:

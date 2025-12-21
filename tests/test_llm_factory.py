@@ -9,9 +9,9 @@ import os
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from navigator_mcp.llm.factory import VisualGrounderFactory, FailoverGrounder
-from navigator_mcp.llm.base import LocateResult
-from navigator_mcp.llm.lmstudio_discovery import ModelInfo, ServerInfo
+from surf_mcp.llm.factory import VisualGrounderFactory, FailoverGrounder
+from surf_mcp.llm.base import LocateResult
+from surf_mcp.llm.lmstudio_discovery import ModelInfo, ServerInfo
 
 
 class TestVisualGrounderFactory:
@@ -22,7 +22,7 @@ class TestVisualGrounderFactory:
         """Factory creates OpenAI adapter when no provider specified."""
         with patch.dict(os.environ, {"NAVIGATOR_LLM_PROVIDER": "openai"}, clear=False):
             with patch(
-                "navigator_mcp.llm.factory.discover_fara_server",
+                "surf_mcp.llm.factory.discover_fara_server",
                 new_callable=AsyncMock,
                 return_value=("http://localhost:1234/v1", "fara-7b"),
             ):
@@ -62,7 +62,7 @@ class TestVisualGrounderFactory:
     async def test_create_uses_discovery_result(self):
         """Factory uses server discovered by discover_fara_server."""
         with patch(
-            "navigator_mcp.llm.factory.discover_fara_server",
+            "surf_mcp.llm.factory.discover_fara_server",
             new_callable=AsyncMock,
             return_value=("http://best-server:1234/v1", "optimal-model"),
         ):
@@ -182,7 +182,7 @@ class TestLMStudioDiscovery:
     @pytest.mark.asyncio
     async def test_discover_prefers_loaded_model(self):
         """Discovery returns server with model already loaded."""
-        from navigator_mcp.llm.lmstudio_discovery import discover_fara_server, probe_server
+        from surf_mcp.llm.lmstudio_discovery import discover_fara_server, probe_server
 
         # Mock probe_server to return different states
         async def mock_probe(url, timeout=2.0):
@@ -202,7 +202,7 @@ class TestLMStudioDiscovery:
                 )
 
         with patch(
-            "navigator_mcp.llm.lmstudio_discovery.probe_server",
+            "surf_mcp.llm.lmstudio_discovery.probe_server",
             side_effect=mock_probe,
         ):
             with patch.dict(
@@ -221,7 +221,7 @@ class TestLMStudioDiscovery:
     @pytest.mark.asyncio
     async def test_discover_falls_back_when_no_loaded(self):
         """Discovery returns first available when none loaded."""
-        from navigator_mcp.llm.lmstudio_discovery import discover_fara_server
+        from surf_mcp.llm.lmstudio_discovery import discover_fara_server
 
         async def mock_probe(url, timeout=2.0):
             return ServerInfo(
@@ -232,7 +232,7 @@ class TestLMStudioDiscovery:
             )
 
         with patch(
-            "navigator_mcp.llm.lmstudio_discovery.probe_server",
+            "surf_mcp.llm.lmstudio_discovery.probe_server",
             side_effect=mock_probe,
         ):
             with patch.dict(
@@ -254,7 +254,7 @@ class TestFaraResponseParsing:
     @pytest.fixture
     def grounder(self):
         """Create an OpenAI grounder for testing parsing."""
-        from navigator_mcp.llm.openai_adapter import OpenAIVisualGrounder
+        from surf_mcp.llm.openai_adapter import OpenAIVisualGrounder
         return OpenAIVisualGrounder()
 
     def test_parse_computer_use_left_click(self, grounder):
@@ -397,7 +397,7 @@ class TestServerParsing:
 
     def test_parse_multiple_servers(self):
         """Parses comma-separated server list."""
-        from navigator_mcp.llm.lmstudio_discovery import parse_lmstudio_servers
+        from surf_mcp.llm.lmstudio_discovery import parse_lmstudio_servers
 
         with patch.dict(
             os.environ,
@@ -412,7 +412,7 @@ class TestServerParsing:
 
     def test_parse_single_server(self):
         """Parses single server."""
-        from navigator_mcp.llm.lmstudio_discovery import parse_lmstudio_servers
+        from surf_mcp.llm.lmstudio_discovery import parse_lmstudio_servers
 
         with patch.dict(os.environ, {"LMSTUDIO_SERVERS": "main=http://localhost:1234/v1"}):
             servers = parse_lmstudio_servers()
@@ -421,7 +421,7 @@ class TestServerParsing:
 
     def test_parse_fallback_when_empty(self):
         """Falls back to default when LMSTUDIO_SERVERS not set."""
-        from navigator_mcp.llm.lmstudio_discovery import parse_lmstudio_servers
+        from surf_mcp.llm.lmstudio_discovery import parse_lmstudio_servers
 
         with patch.dict(os.environ, {}, clear=True):
             # Clear LMSTUDIO_SERVERS if it exists
@@ -432,7 +432,7 @@ class TestServerParsing:
 
     def test_parse_model_ids(self):
         """Parses comma-separated model IDs."""
-        from navigator_mcp.llm.lmstudio_discovery import get_fara_model_ids
+        from surf_mcp.llm.lmstudio_discovery import get_fara_model_ids
 
         with patch.dict(os.environ, {"FARA_MODEL_IDS": "model-a,model-b,model-c"}):
             ids = get_fara_model_ids()

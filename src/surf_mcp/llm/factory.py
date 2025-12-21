@@ -51,7 +51,7 @@ class VisualGrounderFactory:
             Configured VisualGrounder ready to use
         """
         if provider is None:
-            provider = os.environ.get("NAVIGATOR_LLM_PROVIDER", "openai")
+            provider = os.environ.get("SURF_LLM_PROVIDER", "openai")
 
         if provider == "gemini":
             from .gemini_adapter import GeminiVisualGrounder
@@ -83,7 +83,7 @@ class VisualGrounderFactory:
             FailoverGrounder that wraps adapters with retry logic
         """
         if provider is None:
-            provider = os.environ.get("NAVIGATOR_LLM_PROVIDER", "openai")
+            provider = os.environ.get("SURF_LLM_PROVIDER", "openai")
 
         if max_failures is None:
             max_failures = int(os.environ.get("FARA_MAX_FAILURES", "2"))

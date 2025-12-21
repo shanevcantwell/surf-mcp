@@ -60,10 +60,10 @@ elif [ "$CHROMIUM_CHECK" != "ok" ]; then
     echo "Warning: Playwright check returned: $CHROMIUM_CHECK"
 fi
 
-# Check navigator-mcp is available
-if ! command -v navigator-mcp &> /dev/null; then
-    echo "Warning: navigator-mcp not in PATH"
-    echo "Install with: pip install -e /path/to/navigation-mcp"
+# Check surf-mcp is available
+if ! command -v surf-mcp &> /dev/null; then
+    echo "Warning: surf-mcp not in PATH"
+    echo "Install with: pip install -e /path/to/surf-mcp"
 fi
 
 echo ""

@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  navigator-mcp:
+  surf-mcp:
     build: .
     stdin_open: true
     tty: true
@@ -19,26 +19,19 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_API_BASE=${OPENAI_API_BASE:-}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
-      - NAVIGATOR_LLM_PROVIDER=${NAVIGATOR_LLM_PROVIDER:-openai}
+      - SURF_LLM_PROVIDER=${SURF_LLM_PROVIDER:-openai}
 
       # Browser Configuration
-      - NAVIGATOR_BROWSER_HEADLESS=true
-      - NAVIGATOR_BROWSER_VIEWPORT_WIDTH=1920
-      - NAVIGATOR_BROWSER_VIEWPORT_HEIGHT=1080
+      - SURF_BROWSER_HEADLESS=true
+      - SURF_BROWSER_VIEWPORT_WIDTH=1920
+      - SURF_BROWSER_VIEWPORT_HEIGHT=1080
 
       # Session Configuration
-      - NAVIGATOR_MAX_SESSIONS=10
-      - NAVIGATOR_SESSION_TIMEOUT_SECONDS=3600
-
-      # Filesystem Configuration
-      - NAVIGATOR_FS_SANDBOX=true
+      - SURF_MAX_SESSIONS=10
+      - SURF_SESSION_TIMEOUT_SECONDS=3600
 
       # Logging
-      - NAVIGATOR_LOG_LEVEL=${NAVIGATOR_LOG_LEVEL:-INFO}
-
-    volumes:
-      # Mount workspace for filesystem operations
-      - ./workspace:/workspace
+      - SURF_LOG_LEVEL=${SURF_LOG_LEVEL:-INFO}
 
     # Enable host.docker.internal on Linux (works by default on Mac/Windows)
     extra_hosts:

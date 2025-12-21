@@ -4,12 +4,12 @@ Fara Test Harness - Streamlit UI for visual grounding experimentation.
 Run with: streamlit run app.py
 
 Per ADR-003: Interactive harness for testing Fara visual grounding
-through MCP exclusively (no direct imports from navigator-mcp).
+through MCP exclusively (no direct imports from surf-mcp).
 """
 
 import streamlit as st
 
-from mcp_client import SyncNavigatorClient
+from mcp_client import SyncSurfClient
 from utils import (
     STORAGE_STATE_PATH,
     load_storage_state,
@@ -38,7 +38,7 @@ def format_error(error: str) -> str:
         )
 
     if "Connection refused" in error:
-        return "Cannot connect to navigator-mcp server. Ensure it is running."
+        return "Cannot connect to surf-mcp server. Ensure it is running."
 
     if "playwright package required" in error.lower():
         return "Playwright not installed. Run: `pip install playwright && playwright install chromium`"
@@ -210,7 +210,7 @@ def main():
 
             if st.button("Connect", use_container_width=True):
                 try:
-                    client = SyncNavigatorClient()
+                    client = SyncSurfClient()
                     client.connect()
 
                     storage_state = load_storage_state()

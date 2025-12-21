@@ -135,10 +135,10 @@ class AdaptiveStrategy:
 
 | Phase | Features | Target |
 |-------|----------|--------|
-| **Current** | Basic strategy interface, element_hints | v0.2.0 |
-| **Near-term** | AuthConfig, interactive auth | v0.2.0 |
-| **Later** | Storage state loading, MFA patterns | v0.3.0 |
-| **Future** | Learned strategies, recording | v0.4.0+ |
+| **Done** | Direct Fara execution via `act()` | v0.3.0 ✓ |
+| **Next** | Basic strategy interface, element_hints | v0.4.0 |
+| **Later** | AuthConfig, interactive auth, storage state loading | v0.5.0 |
+| **Future** | MFA patterns, learned strategies, recording | v0.6.0+ |
 
 ---
 
@@ -174,4 +174,4 @@ Current implementation provides foundation for strategies via `BrowserDriver.act
 
 ## Decision Outcome
 
-**Proposed** - This ADR captures architectural direction. Implementation will be incremental, starting with basic strategy interface in v0.2.0.
+**Proposed** - This ADR captures architectural direction. The foundation (ADR-005 direct Fara execution) is now complete in v0.3.0. Strategy interface implementation is planned for v0.4.0.

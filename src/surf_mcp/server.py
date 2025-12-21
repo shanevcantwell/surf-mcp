@@ -22,7 +22,7 @@ from .commands import session, navigation, content, filesystem, browser
 
 # Configure logging
 logging.basicConfig(
-    level=os.environ.get("NAVIGATOR_LOG_LEVEL", "INFO"),
+    level=os.environ.get("SURF_LOG_LEVEL", "INFO"),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)

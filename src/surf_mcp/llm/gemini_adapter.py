@@ -46,7 +46,7 @@ class GeminiVisualGrounder(VisualGrounder):
         """
         self.api_key = api_key or os.environ.get("GOOGLE_API_KEY")
         self.model = model or os.environ.get(
-            "NAVIGATOR_LLM_MODEL", "gemini-2.0-flash"
+            "SURF_LLM_MODEL", "gemini-2.0-flash"
         )
         self._client: Optional[Any] = None  # GenerativeModel type
 

@@ -41,11 +41,11 @@ if %errorlevel% neq 0 (
     playwright install chromium
 )
 
-REM Check navigator-mcp
-where navigator-mcp >nul 2>&1
+REM Check surf-mcp
+where surf-mcp >nul 2>&1
 if %errorlevel% neq 0 (
-    echo Warning: navigator-mcp not in PATH
-    echo Install with: pip install -e /path/to/navigation-mcp
+    echo Warning: surf-mcp not in PATH
+    echo Install with: pip install -e /path/to/surf-mcp
 )
 
 echo.

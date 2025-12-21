@@ -23,7 +23,7 @@ class TestURLAllowlistBlocklist:
     @pytest.mark.asyncio
     async def test_blocked_domain_denied(self):
         """Blocked domains should be denied navigation."""
-        from navigator_mcp.drivers.browser import BrowserDriver
+        from surf_mcp.drivers.browser import BrowserDriver
 
         driver = BrowserDriver(
             blocked_domains=["*.bank.com", "paypal.com"]
@@ -42,7 +42,7 @@ class TestURLAllowlistBlocklist:
     @pytest.mark.asyncio
     async def test_allowlist_only_permits_listed_domains(self):
         """When allowlist is set, only listed domains should be permitted."""
-        from navigator_mcp.drivers.browser import BrowserDriver
+        from surf_mcp.drivers.browser import BrowserDriver
 
         driver = BrowserDriver(
             allowed_domains=["gemini.google.com", "example.com"]
@@ -60,7 +60,7 @@ class TestURLAllowlistBlocklist:
     @pytest.mark.asyncio
     async def test_allowlist_permits_listed_domain(self):
         """Domains in allowlist should be permitted."""
-        from navigator_mcp.drivers.browser import BrowserDriver
+        from surf_mcp.drivers.browser import BrowserDriver
 
         driver = BrowserDriver(
             allowed_domains=["example.com"]
@@ -80,7 +80,7 @@ class TestURLAllowlistBlocklist:
     @pytest.mark.asyncio
     async def test_default_blocklist_blocks_sensitive_sites(self):
         """Default blocklist should block common sensitive sites."""
-        from navigator_mcp.drivers.browser import BrowserDriver
+        from surf_mcp.drivers.browser import BrowserDriver
 
         driver = BrowserDriver()  # Uses default blocklist
 
@@ -102,7 +102,7 @@ class TestURLAllowlistBlocklist:
     @pytest.mark.asyncio
     async def test_blocklist_supports_wildcard_subdomains(self):
         """Blocklist should support wildcard patterns like *.bank.com."""
-        from navigator_mcp.drivers.browser import BrowserDriver
+        from surf_mcp.drivers.browser import BrowserDriver
 
         driver = BrowserDriver(
             blocked_domains=["*.bank.com"]
@@ -126,7 +126,7 @@ class TestURLAllowlistBlocklist:
     @pytest.mark.asyncio
     async def test_blocklist_takes_precedence_over_allowlist(self):
         """If domain is in both lists, blocklist should win."""
-        from navigator_mcp.drivers.browser import BrowserDriver
+        from surf_mcp.drivers.browser import BrowserDriver
 
         driver = BrowserDriver(
             allowed_domains=["google.com", "accounts.google.com"],
@@ -153,7 +153,7 @@ class TestAuditLogging:
     @pytest.mark.asyncio
     async def test_goto_logs_audit_event(self):
         """Navigation should create audit log entry."""
-        from navigator_mcp.drivers.browser import BrowserDriver
+        from surf_mcp.drivers.browser import BrowserDriver
 
         driver = BrowserDriver()
 
@@ -173,8 +173,8 @@ class TestAuditLogging:
     @pytest.mark.asyncio
     async def test_click_logs_audit_event_with_coordinates(self):
         """Click should log coordinates and LLM response."""
-        from navigator_mcp.drivers.browser import BrowserDriver
-        from navigator_mcp.llm.base import LocateResult
+        from surf_mcp.drivers.browser import BrowserDriver
+        from surf_mcp.llm.base import LocateResult
 
         # Mock visual grounder
         mock_grounder = MagicMock()
@@ -209,7 +209,7 @@ class TestAuditLogging:
     @pytest.mark.asyncio
     async def test_audit_log_includes_timestamp(self):
         """All audit events should have timestamps."""
-        from navigator_mcp.drivers.browser import BrowserDriver
+        from surf_mcp.drivers.browser import BrowserDriver
 
         driver = BrowserDriver()
 
@@ -228,7 +228,7 @@ class TestAuditLogging:
     @pytest.mark.asyncio
     async def test_audit_log_includes_session_id(self):
         """Audit events should include session ID for correlation."""
-        from navigator_mcp.drivers.browser import BrowserDriver
+        from surf_mcp.drivers.browser import BrowserDriver
 
         driver = BrowserDriver()
 
@@ -248,7 +248,7 @@ class TestAuditLogging:
     @pytest.mark.asyncio
     async def test_blocked_navigation_logged(self):
         """Blocked navigations should be logged for security monitoring."""
-        from navigator_mcp.drivers.browser import BrowserDriver
+        from surf_mcp.drivers.browser import BrowserDriver
 
         driver = BrowserDriver(
             blocked_domains=["evil.com"]
@@ -266,8 +266,8 @@ class TestAuditLogging:
     @pytest.mark.asyncio
     async def test_audit_log_includes_screenshot_hash(self):
         """Audit events should include hash of screenshot used."""
-        from navigator_mcp.drivers.browser import BrowserDriver
-        from navigator_mcp.llm.base import LocateResult
+        from surf_mcp.drivers.browser import BrowserDriver
+        from surf_mcp.llm.base import LocateResult
 
         mock_grounder = MagicMock()
         mock_grounder.locate = AsyncMock(return_value=LocateResult(
@@ -304,8 +304,8 @@ class TestRateLimiting:
     @pytest.mark.asyncio
     async def test_rate_limit_blocks_excessive_actions(self):
         """Exceeding rate limit should block further actions."""
-        from navigator_mcp.drivers.browser import BrowserDriver
-        from navigator_mcp.llm.base import LocateResult
+        from surf_mcp.drivers.browser import BrowserDriver
+        from surf_mcp.llm.base import LocateResult
 
         mock_grounder = MagicMock()
         mock_grounder.locate = AsyncMock(return_value=LocateResult(
@@ -336,8 +336,8 @@ class TestRateLimiting:
     @pytest.mark.asyncio
     async def test_rate_limit_resets_after_window(self):
         """Rate limit should reset after time window passes."""
-        from navigator_mcp.drivers.browser import BrowserDriver
-        from navigator_mcp.llm.base import LocateResult
+        from surf_mcp.drivers.browser import BrowserDriver
+        from surf_mcp.llm.base import LocateResult
         import time
 
         mock_grounder = MagicMock()
@@ -374,8 +374,8 @@ class TestRateLimiting:
     @pytest.mark.asyncio
     async def test_rate_limit_applies_to_all_action_types(self):
         """Rate limit should count clicks, types, and scrolls together."""
-        from navigator_mcp.drivers.browser import BrowserDriver
-        from navigator_mcp.llm.base import LocateResult
+        from surf_mcp.drivers.browser import BrowserDriver
+        from surf_mcp.llm.base import LocateResult
 
         mock_grounder = MagicMock()
         mock_grounder.locate = AsyncMock(return_value=LocateResult(
@@ -408,7 +408,7 @@ class TestRateLimiting:
     @pytest.mark.asyncio
     async def test_navigation_not_rate_limited(self):
         """goto/back/forward should not count against rate limit."""
-        from navigator_mcp.drivers.browser import BrowserDriver
+        from surf_mcp.drivers.browser import BrowserDriver
 
         driver = BrowserDriver(
             max_actions_per_minute=2
@@ -428,7 +428,7 @@ class TestRateLimiting:
     @pytest.mark.asyncio
     async def test_default_rate_limit_is_reasonable(self):
         """Default rate limit should allow normal use (30/min)."""
-        from navigator_mcp.drivers.browser import BrowserDriver
+        from surf_mcp.drivers.browser import BrowserDriver
 
         driver = BrowserDriver()
 
@@ -447,7 +447,7 @@ class TestSecurityIntegration:
     @pytest.mark.asyncio
     async def test_blocked_domain_audit_logged_rate_not_consumed(self):
         """Blocked navigation should log but not consume rate limit."""
-        from navigator_mcp.drivers.browser import BrowserDriver
+        from surf_mcp.drivers.browser import BrowserDriver
 
         driver = BrowserDriver(
             blocked_domains=["evil.com"],
@@ -474,8 +474,8 @@ class TestSecurityIntegration:
     @pytest.mark.asyncio
     async def test_rate_limited_action_still_logged(self):
         """Rate-limited actions should still be logged."""
-        from navigator_mcp.drivers.browser import BrowserDriver
-        from navigator_mcp.llm.base import LocateResult
+        from surf_mcp.drivers.browser import BrowserDriver
+        from surf_mcp.llm.base import LocateResult
 
         mock_grounder = MagicMock()
         mock_grounder.locate = AsyncMock(return_value=LocateResult(

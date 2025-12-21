@@ -20,12 +20,8 @@ RUN pip install --no-cache-dir .
 RUN playwright install chromium
 RUN playwright install-deps chromium
 
-# Create workspace directory
-RUN mkdir -p /workspace
-
 # Set environment variables
-ENV NAVIGATOR_FS_SANDBOX=true
-ENV NAVIGATOR_BROWSER_HEADLESS=true
+ENV SURF_BROWSER_HEADLESS=true
 
 # Expose stdio for MCP
-CMD ["navigator-mcp"]
+CMD ["surf-mcp"]

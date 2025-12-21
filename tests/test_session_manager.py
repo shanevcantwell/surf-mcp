@@ -4,7 +4,7 @@ Tests for SessionManager.
 
 import pytest
 
-from navigator_mcp.session_manager import SessionManager
+from surf_mcp.session_manager import SessionManager
 
 
 @pytest.mark.asyncio

@@ -102,10 +102,10 @@ class SessionManager:
         timeout_seconds: Optional[int] = None,
     ):
         self.max_sessions = max_sessions or int(
-            os.environ.get("NAVIGATOR_MAX_SESSIONS", 10)
+            os.environ.get("SURF_MAX_SESSIONS", 10)
         )
         self.timeout_seconds = timeout_seconds or int(
-            os.environ.get("NAVIGATOR_SESSION_TIMEOUT_SECONDS", 3600)
+            os.environ.get("SURF_SESSION_TIMEOUT_SECONDS", 3600)
         )
         self._sessions: Dict[str, Session] = {}
         self._lock = asyncio.Lock()

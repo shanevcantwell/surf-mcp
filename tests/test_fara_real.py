@@ -82,7 +82,7 @@ class TestFaraRealIntegration:
     @pytest.mark.asyncio
     async def test_openai_adapter_locate(self, sample_screenshot_b64):
         """Test that OpenAIVisualGrounder.locate() returns valid results."""
-        from navigator_mcp.llm.openai_adapter import OpenAIVisualGrounder
+        from surf_mcp.llm.openai_adapter import OpenAIVisualGrounder
 
         grounder = OpenAIVisualGrounder(
             api_key="not-needed",
@@ -112,7 +112,7 @@ class TestFaraRealIntegration:
     @pytest.mark.asyncio
     async def test_openai_adapter_get_action(self, sample_screenshot_b64):
         """Test that get_action() returns a FaraToolCall."""
-        from navigator_mcp.llm.openai_adapter import OpenAIVisualGrounder
+        from surf_mcp.llm.openai_adapter import OpenAIVisualGrounder
 
         grounder = OpenAIVisualGrounder(
             api_key="not-needed",
@@ -140,7 +140,7 @@ class TestFaraRealIntegration:
     @pytest.mark.asyncio
     async def test_discovery_finds_fara(self):
         """Test that server discovery finds the Fara model."""
-        from navigator_mcp.llm.lmstudio_discovery import discover_fara_server
+        from surf_mcp.llm.lmstudio_discovery import discover_fara_server
 
         print("\n--- Testing discover_fara_server() ---")
 

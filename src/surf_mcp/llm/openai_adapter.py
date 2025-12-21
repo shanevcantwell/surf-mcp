@@ -45,7 +45,7 @@ class OpenAIVisualGrounder(VisualGrounder):
     - Any OpenAI-compatible vision endpoint
 
     For automatic LM Studio server discovery, use:
-        from navigator_mcp.llm.lmstudio_discovery import discover_fara_server
+        from surf_mcp.llm.lmstudio_discovery import discover_fara_server
         url, model = await discover_fara_server()
         grounder = OpenAIVisualGrounder(api_base=url, model=model)
     """
@@ -63,14 +63,14 @@ class OpenAIVisualGrounder(VisualGrounder):
         Args:
             api_key: OpenAI API key (defaults to OPENAI_API_KEY env var, "not-needed" for LM Studio)
             api_base: API base URL (defaults to OPENAI_API_BASE env var)
-            model: Model to use (defaults to NAVIGATOR_LLM_MODEL env var)
+            model: Model to use (defaults to SURF_LLM_MODEL env var)
             native_resolutions: Resolution scaling config for the model
         """
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY", "not-needed")
         self.api_base = api_base or os.environ.get(
             "OPENAI_API_BASE", "https://api.openai.com/v1"
         )
-        self.model = model or os.environ.get("NAVIGATOR_LLM_MODEL", "gpt-4o")
+        self.model = model or os.environ.get("SURF_LLM_MODEL", "gpt-4o")
         self.native_resolutions = native_resolutions or DEFAULT_NATIVE_RESOLUTIONS
 
         self._client: Optional[AsyncOpenAI] = None
