@@ -1,3 +1,5 @@
+![Surf MCP](docs/images/banner.png)
+
 # Surf MCP
 
 MCP server for visual browser automation via Fara.
