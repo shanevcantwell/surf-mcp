@@ -200,14 +200,7 @@ class SessionManager:
         self, driver_type: str, config: Dict[str, Any]
     ) -> NavigatorDriver:
         """Create a driver instance based on type."""
-        if driver_type == "filesystem":
-            from .drivers.filesystem import FileSystemDriver
-
-            root = config.get("root", ".")
-            sandbox = config.get("sandbox", True)
-            return FileSystemDriver(root=root, sandbox=sandbox)
-
-        elif driver_type == "browser":
+        if driver_type == "browser":
             from .drivers.browser import BrowserDriver
             from .security import validate_storage_state
 

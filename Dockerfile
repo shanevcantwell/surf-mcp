@@ -1,4 +1,9 @@
-FROM python:3.11-slim
+# Multi-stage Dockerfile for surf-mcp
+# Usage:
+#   Production: docker build -t surf-mcp .
+#   Development: docker build --target dev -t surf-mcp:dev .
+
+FROM python:3.11-slim AS base
 
 # Install system dependencies for Playwright
 RUN apt-get update && apt-get install -y \
@@ -13,7 +18,12 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src/ src/
 
-# Install package
+# ==============================================================================
+# Production target (default)
+# ==============================================================================
+FROM base AS prod
+
+# Install package (production dependencies only)
 RUN pip install --no-cache-dir .
 
 # Install Playwright browsers
@@ -25,3 +35,24 @@ ENV SURF_BROWSER_HEADLESS=true
 
 # Expose stdio for MCP
 CMD ["surf-mcp"]
+
+# ==============================================================================
+# Development target
+# ==============================================================================
+FROM base AS dev
+
+# Copy test files
+COPY tests/ tests/
+
+# Install package with dev dependencies
+RUN pip install --no-cache-dir ".[dev]"
+
+# Install Playwright browsers
+RUN playwright install chromium
+RUN playwright install-deps chromium
+
+# Set environment variables
+ENV SURF_BROWSER_HEADLESS=true
+
+# Default to running tests
+CMD ["pytest", "-v"]
