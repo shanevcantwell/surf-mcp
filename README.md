@@ -1,5 +1,9 @@
 ![Surf MCP](docs/images/banner.png)
 
+![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)
+![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
+![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-orange.svg)
+
 # Surf MCP
 
 MCP server for visual browser automation via Fara.
@@ -307,3 +311,7 @@ ruff check src/
 ## License
 
 MIT
+
+---
+
+© 2025 Shane V Cantwell | [reflectiveattention.ai](https://reflectiveattention.ai)
