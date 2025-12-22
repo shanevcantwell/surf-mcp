@@ -17,9 +17,10 @@ services:
 
       # Alternative: Cloud LLM providers
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - OPENAI_API_BASE=${OPENAI_API_BASE:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - SURF_LLM_PROVIDER=${SURF_LLM_PROVIDER:-openai}
+      - SURF_LLM_MODEL=${SURF_LLM_MODEL:-}
 
       # Browser Configuration
       - SURF_BROWSER_HEADLESS=true

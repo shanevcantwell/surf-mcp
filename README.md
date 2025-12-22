@@ -126,17 +126,17 @@ Add to your MCP client configuration:
 ### Docker
 
 ```bash
-# Build the image
-docker build -t surf-mcp .
+# Recommended: use docker compose (reads .env automatically)
+cp .env.example .env
+# Edit .env with your settings
+docker compose up
 
-# Run with LM Studio on host
+# Or build and run directly (note: --env-file doesn't strip quotes)
+docker build -t surf-mcp .
 docker run -it --rm \
   --add-host=host.docker.internal:host-gateway \
-  -e LMSTUDIO_SERVERS="default=http://host.docker.internal:1234/v1" \
+  -e LMSTUDIO_SERVERS=default=http://host.docker.internal:1234/v1 \
   surf-mcp
-
-# Or use docker-compose
-docker-compose up -d
 ```
 
 ### Fara Test Harness

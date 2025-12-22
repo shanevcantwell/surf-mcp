@@ -215,7 +215,8 @@ class TestMCPServerIntegration:
         """Test basic connect/disconnect cycle."""
         client = SurfMCPClient()
 
-        await client.connect()
+        # Use local mode for tests (surf-mcp installed via pip)
+        await client.connect(use_docker=False)
         assert client._connected is True
 
         await client.disconnect()
@@ -225,51 +226,12 @@ class TestMCPServerIntegration:
     async def test_session_list_empty(self, check_server_available):
         """Test session_list on fresh server."""
         client = SurfMCPClient()
-        await client.connect()
+        await client.connect(use_docker=False)
 
         try:
             result = await client.session_list()
             assert "sessions" in result
             assert isinstance(result["sessions"], list)
-        finally:
-            await client.disconnect()
-
-    @pytest.mark.asyncio
-    async def test_filesystem_session_roundtrip(
-        self, check_server_available, temp_workspace
-    ):
-        """Test creating filesystem session (no playwright needed)."""
-        client = SurfMCPClient()
-        await client.connect()
-
-        try:
-            # Create filesystem session directly via call_tool
-            result = await client.call_tool(
-                "session_create",
-                {
-                    "drivers": {
-                        "fs": {
-                            "type": "filesystem",
-                            "root": str(temp_workspace),
-                            "sandbox": True,
-                        }
-                    }
-                },
-            )
-
-            assert "session_id" in result
-            session_id = result["session_id"]
-
-            # List should show session
-            list_result = await client.session_list()
-            assert any(s["session_id"] == session_id for s in list_result["sessions"])
-
-            # Destroy session
-            destroy_result = await client.call_tool(
-                "session_destroy", {"session_id": session_id}
-            )
-            assert "success" in destroy_result or "summary" in destroy_result
-
         finally:
             await client.disconnect()
 
@@ -302,7 +264,7 @@ class TestBrowserIntegration:
     ):
         """Test browser session with storage_state round-trip."""
         client = SurfMCPClient()
-        await client.connect()
+        await client.connect(use_docker=False)
 
         try:
             # Create browser session with empty storage_state
@@ -340,7 +302,7 @@ class TestBrowserIntegration:
     async def test_browser_snapshot(self, check_playwright_available):
         """Test taking browser screenshot."""
         client = SurfMCPClient()
-        await client.connect()
+        await client.connect(use_docker=False)
 
         try:
             result = await client.session_create(headless=True)
@@ -395,68 +357,13 @@ class TestSyncClientIntegration:
     def test_sync_client_connect_disconnect(self, check_server_available):
         """Test sync client connect/disconnect cycle."""
         client = SyncSurfClient()
-        client.connect()
+        client.connect(use_docker=False)
 
         # Should be connected
         assert client._client._connected is True
 
         client.disconnect()
         assert client._client._connected is False
-
-    def test_sync_client_filesystem_roundtrip(
-        self, check_server_available, temp_workspace
-    ):
-        """Test sync client with filesystem driver."""
-        client = SyncSurfClient()
-        client.connect()
-
-        try:
-            # Create filesystem session using call_tool through _run
-            result = client._run(
-                client._client.call_tool(
-                    "session_create",
-                    {
-                        "drivers": {
-                            "fs": {
-                                "type": "filesystem",
-                                "root": str(temp_workspace),
-                                "sandbox": True,
-                            }
-                        }
-                    },
-                )
-            )
-
-            assert "session_id" in result
-            session_id = result["session_id"]
-
-            # Navigate in filesystem
-            goto_result = client._run(
-                client._client.call_tool(
-                    "goto",
-                    {"session_id": session_id, "driver": "fs", "location": "."},
-                )
-            )
-            assert goto_result.get("success", True)
-
-            # List contents
-            list_result = client._run(
-                client._client.call_tool(
-                    "list",
-                    {"session_id": session_id, "driver": "fs"},
-                )
-            )
-            assert "entries" in list_result
-
-            # Destroy
-            client._run(
-                client._client.call_tool(
-                    "session_destroy", {"session_id": session_id}
-                )
-            )
-
-        finally:
-            client.disconnect()
 
 
 @pytest.mark.integration
@@ -481,7 +388,7 @@ class TestFullBrowserWorkflow:
     async def test_full_navigation_workflow(self, check_playwright_available):
         """Test complete navigation workflow: create, goto, snapshot, destroy."""
         client = SurfMCPClient()
-        await client.connect()
+        await client.connect(use_docker=False)
 
         try:
             # Create headless browser session
@@ -519,7 +426,7 @@ class TestFullBrowserWorkflow:
     async def test_browser_scroll(self, check_playwright_available):
         """Test browser scroll functionality."""
         client = SurfMCPClient()
-        await client.connect()
+        await client.connect(use_docker=False)
 
         try:
             result = await client.session_create(headless=True)

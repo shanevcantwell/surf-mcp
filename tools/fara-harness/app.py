@@ -206,12 +206,19 @@ def main():
         # Connection controls
         if not st.session_state.connected:
             st.subheader("Connect")
+
+            # Mode selection
+            use_docker = st.checkbox(
+                "Use Docker",
+                value=True,
+                help="Spawn surf-mcp via Docker (recommended). Uncheck for local install.",
+            )
             headless = st.checkbox("Headless mode", value=True)
 
             if st.button("Connect", use_container_width=True):
                 try:
                     client = SyncSurfClient()
-                    client.connect()
+                    client.connect(use_docker=use_docker)
 
                     storage_state = load_storage_state()
                     result = client.session_create(
@@ -225,7 +232,8 @@ def main():
                         st.session_state.client = client
                         st.session_state.session_id = result["session_id"]
                         st.session_state.connected = True
-                        add_to_history(f"✓ Connected: {result['session_id'][:8]}...")
+                        mode = "Docker" if use_docker else "local"
+                        add_to_history(f"✓ Connected ({mode}): {result['session_id'][:8]}...")
                         st.rerun()
 
                 except Exception as e:

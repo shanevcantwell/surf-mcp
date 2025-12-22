@@ -41,8 +41,9 @@ CMD ["surf-mcp"]
 # ==============================================================================
 FROM base AS dev
 
-# Copy test files
+# Copy test files and harness tools
 COPY tests/ tests/
+COPY tools/ tools/
 
 # Install package with dev dependencies
 RUN pip install --no-cache-dir ".[dev]"

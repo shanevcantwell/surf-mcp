@@ -2,18 +2,57 @@
 MCP Client wrapper for Fara Test Harness.
 
 Uses the official MCP SDK to communicate with surf-mcp server
-via subprocess stdio.
+via subprocess stdio. Supports both Docker and local installation.
 """
 
 import asyncio
 import json
+import os
 import sys
 from contextlib import AsyncExitStack
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+
+# Environment variables to pass through to Docker container
+PASSTHROUGH_ENV_VARS = [
+    "LMSTUDIO_SERVERS",
+    "FARA_MODEL_IDS",
+    "FARA_MAX_FAILURES",
+    "FARA_PROBE_TIMEOUT",
+    "FARA_MIN_CONFIDENCE",
+    "FARA_MAX_AGENT_STEPS",
+    "OPENAI_API_KEY",
+    "OPENAI_BASE_URL",
+    "GOOGLE_API_KEY",
+    "SURF_LLM_PROVIDER",
+    "SURF_LLM_MODEL",
+    "SURF_BROWSER_HEADLESS",
+    "SURF_LOG_LEVEL",
+]
+
+
+def build_docker_args(image: str = "surf-mcp") -> List[str]:
+    """Build docker run arguments with environment passthrough."""
+    args = ["run", "-i", "--rm"]
+
+    # Add host.docker.internal for Linux (works by default on Mac/Windows)
+    args.extend(["--add-host", "host.docker.internal:host-gateway"])
+
+    # Pass through environment variables that are set
+    for var in PASSTHROUGH_ENV_VARS:
+        value = os.environ.get(var)
+        if value:
+            args.extend(["-e", f"{var}={value}"])
+
+    # Always set headless mode in container
+    if "SURF_BROWSER_HEADLESS" not in os.environ:
+        args.extend(["-e", "SURF_BROWSER_HEADLESS=true"])
+
+    args.append(image)
+    return args
 
 
 class SurfMCPClient:
@@ -21,6 +60,7 @@ class SurfMCPClient:
     Client wrapper for surf-mcp server.
 
     Handles subprocess lifecycle and provides typed methods for MCP tools.
+    Supports Docker mode (default) or local installation.
     """
 
     def __init__(self):
@@ -28,23 +68,39 @@ class SurfMCPClient:
         self.exit_stack: Optional[AsyncExitStack] = None
         self._connected = False
 
-    async def connect(self, server_command: str = "surf-mcp") -> None:
+    async def connect(
+        self,
+        use_docker: bool = True,
+        docker_image: str = "surf-mcp",
+        local_command: str = "surf-mcp",
+    ) -> None:
         """
         Connect to surf-mcp server.
 
         Args:
-            server_command: Command to start the server (default: surf-mcp)
+            use_docker: If True, spawn via 'docker run' (default: True)
+            docker_image: Docker image name (default: surf-mcp)
+            local_command: Command for local install (default: surf-mcp)
         """
         if self._connected:
             return
 
         self.exit_stack = AsyncExitStack()
 
-        server_params = StdioServerParameters(
-            command=server_command,
-            args=[],
-            env=None,
-        )
+        if use_docker:
+            server_params = StdioServerParameters(
+                command="docker",
+                args=build_docker_args(docker_image),
+                env=None,
+            )
+            print(f"Connecting via Docker: docker {' '.join(build_docker_args(docker_image))}")
+        else:
+            server_params = StdioServerParameters(
+                command=local_command,
+                args=[],
+                env=None,
+            )
+            print(f"Connecting via local command: {local_command}")
 
         stdio_transport = await self.exit_stack.enter_async_context(
             stdio_client(server_params)
@@ -282,8 +338,13 @@ class SyncSurfClient:
             self._setup_loop()
         return self._loop.run_until_complete(coro)
 
-    def connect(self, server_command: str = "surf-mcp") -> None:
-        self._run(self._client.connect(server_command))
+    def connect(
+        self,
+        use_docker: bool = True,
+        docker_image: str = "surf-mcp",
+        local_command: str = "surf-mcp",
+    ) -> None:
+        self._run(self._client.connect(use_docker, docker_image, local_command))
 
     def disconnect(self) -> None:
         self._run(self._client.disconnect())
