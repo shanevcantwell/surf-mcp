@@ -17,6 +17,40 @@ The core insight: an AI that can *see* the page doesn't need to parse HTML.
 - **Session persistence**: Storage state (cookies, localStorage) round-trips through tool calls
 - **Security controls**: Domain allowlists, rate limiting, audit logging
 
+## Security
+
+**surf-mcp is designed for LOCAL use only** via stdio transport.
+
+### Not Suitable For
+
+- **Multi-tenant environments** - trust boundary is the machine
+- **Untrusted networks** without SSH tunneling
+- **Compliance-sensitive contexts** - no formal security audit
+- **Untrusted MCP clients** - surf-mcp trusts its client completely
+
+### Residual Risks
+
+- No encryption at MCP protocol level
+- LLM responses (Fara/Gemini) executed without verification
+- Browser automation can click/type anything visible
+
+### Remote Execution
+
+Use SSH as the transport - surf-mcp sees normal stdio:
+
+```json
+{
+  "mcpServers": {
+    "surf-remote": {
+      "command": "ssh",
+      "args": ["-i", "~/.ssh/key", "user@gpu-box", "surf-mcp"]
+    }
+  }
+}
+```
+
+See [SECURITY.md](SECURITY.md) for the full threat model and security controls.
+
 ## How It Works
 
 Surf uses **Fara-7B** (Microsoft's agentic vision model) to understand web pages:
@@ -248,9 +282,7 @@ Behavior:
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed architecture documentation.
 
-**ADRs:**
-- [ADR-001](docs/adr/ADR-001_Agentic_Browser_Security.md): Browser Security (Phase 1 Complete)
-- [ADR-005](docs/adr/complete/ADR-005_Direct_Fara_Execution.md): Direct Fara Execution (Complete)
+Design decisions are recorded in [docs/adr/](docs/adr/).
 
 ## Development
 

@@ -20,6 +20,25 @@ from mcp.types import Tool, TextContent
 from .session_manager import SessionManager
 from .commands import session, navigation, content, browser
 
+
+def _redact_args(name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+    """Redact sensitive fields from arguments for logging."""
+    if name != "session_create":
+        return args
+
+    redacted = dict(args)
+    if "drivers" in redacted:
+        redacted["drivers"] = {
+            alias: (
+                {**config, "storage_state": "[REDACTED]"}
+                if "storage_state" in config
+                else config
+            )
+            for alias, config in redacted["drivers"].items()
+        }
+    return redacted
+
+
 # Configure logging
 logging.basicConfig(
     level=os.environ.get("SURF_LOG_LEVEL", "INFO"),
@@ -65,7 +84,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
 
     Routes to appropriate command handler based on tool name.
     """
-    logger.debug(f"Tool call: {name} with args: {arguments}")
+    logger.debug(f"Tool call: {name} with args: {_redact_args(name, arguments)}")
 
     try:
         # Session lifecycle

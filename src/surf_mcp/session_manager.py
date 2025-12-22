@@ -209,10 +209,18 @@ class SessionManager:
 
         elif driver_type == "browser":
             from .drivers.browser import BrowserDriver
+            from .security import validate_storage_state
 
             headless = config.get("headless", True)
             viewport = config.get("viewport", (1920, 1080))
             storage_state = config.get("storage_state")
+
+            # Validate storage_state if provided
+            if storage_state is not None:
+                is_valid, error, sanitized = validate_storage_state(storage_state)
+                if not is_valid:
+                    raise ValueError(f"Invalid storage_state: {error}")
+                storage_state = sanitized
 
             # Get visual grounder if configured
             grounder = None

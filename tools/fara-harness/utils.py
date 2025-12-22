@@ -31,7 +31,13 @@ def load_storage_state() -> Optional[dict]:
 
 
 def save_storage_state(state: dict) -> None:
-    """Save storage state to disk."""
+    """
+    Save storage state to disk.
+
+    WARNING: This stores browser credentials (cookies, tokens) in plaintext.
+    The storage/ directory is in .gitignore - never commit these files.
+    For production use, encrypt at rest or use a secrets manager.
+    """
     STORAGE_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
     STORAGE_STATE_PATH.write_text(json.dumps(state, indent=2))
 

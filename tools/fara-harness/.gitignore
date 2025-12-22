@@ -1,0 +1,7 @@
+# Storage state contains browser credentials - never commit
+storage/
+storage_state.json
+
+# Python
+__pycache__/
+*.pyc
