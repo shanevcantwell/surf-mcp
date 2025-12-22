@@ -1,10 +1,19 @@
 """
-Live Fara Tests - Hits real LLM APIs.
+Fara LLM Tests - Real API Calls.
 
-These tests actually call LM Studio. They're skipped if LM Studio isn't available.
+These tests actually call LM Studio or other LLM providers.
+Skipped if no LLM server is available.
 
-Run with: pytest -m live -v -s
-Skip with: pytest -m "not live"
+REQUIREMENTS:
+    LM Studio running at localhost:1234 with Fara model loaded
+    OR: GOOGLE_API_KEY set for Gemini
+
+RUN:
+    pytest tests/test_fara_real.py -v -s
+    pytest -m llm -v -s
+
+SKIP:
+    pytest -m "not llm"
 """
 
 import asyncio
@@ -12,6 +21,9 @@ import base64
 import os
 import pytest
 from pathlib import Path
+
+# Skip entire module if surf_mcp not installed
+pytest.importorskip("surf_mcp", reason="Requires: pip install -e '.[dev]'")
 
 # Check if LM Studio is available
 def lmstudio_available() -> bool:
@@ -24,12 +36,12 @@ def lmstudio_available() -> bool:
         return False
 
 
-# Mark all tests in this module as "live" (real LLM API calls)
+# Mark all tests in this module as "llm" (real LLM API calls)
 pytestmark = [
-    pytest.mark.live,
+    pytest.mark.llm,
     pytest.mark.skipif(
         not lmstudio_available(),
-        reason="ENVIRONMENT: LM Studio not available at localhost:1234"
+        reason="Requires: LM Studio running at localhost:1234 with Fara model"
     ),
 ]
 

@@ -2,7 +2,7 @@
 
 **Purpose:** MCP server for visual browser automation via Fara.
 
-**Version:** 0.4.0
+**Version:** 0.5.0
 
 ---
 
@@ -75,27 +75,41 @@ surf-mcp  # Run the server
 
 ### Testing
 ```bash
+# Setup
 pip install -e ".[dev]"
-playwright install chromium
-pytest                    # All tests (skips unavailable)
-pytest -m "not live"      # Skip LLM tests (for CI)
-pytest -m live -v -s      # Only live LLM tests
-pytest -m integration     # MCP transport tests
-pytest -m browser         # Playwright browser tests
+docker build --target prod -t surf-mcp .
+
+# Run tests
+pytest                           # All tests (skips unavailable)
+pytest -m "not llm"              # Skip LLM tests (for CI)
+pytest -m docker                 # Docker container tests
+pytest -m "docker and browser"   # Docker + browser tests
+pytest -m llm -v -s              # Real LLM tests (requires LM Studio)
 mypy src/
 ```
 
-#### Test Categories
-| Marker | Description | External Deps |
-|--------|-------------|---------------|
-| (none) | Unit tests - mocked | None |
-| `integration` | MCP client/server transport | MCP server |
-| `browser` | Playwright browser automation | Chromium |
-| `live` | Real LLM API calls | LM Studio / Gemini |
+#### Test Markers
+Markers indicate what external dependencies a test REQUIRES:
 
-Skip reasons use prefixes:
-- `ENVIRONMENT:` - Missing dependency (install something)
-- `FRAMEWORK:` - Test harness limitation (known issue)
+| Marker | Requires | Setup |
+|--------|----------|-------|
+| (none) | Nothing | `pip install -e ".[dev]"` |
+| `docker` | Docker image | `docker build --target prod -t surf-mcp .` |
+| `browser` | Chromium | In Docker, or `playwright install chromium` |
+| `llm` | LLM server | LM Studio at localhost:1234 |
+
+#### Test Files
+| File | What it tests | Markers |
+|------|---------------|---------|
+| `test_docker_e2e.py` | Production container works | `docker`, `browser` |
+| `test_harness_integration.py` | MCP client wrapper logic | (none) |
+| `test_session_manager.py` | Session lifecycle | `browser` |
+| `test_security_controls.py` | Domain filter, rate limit | (none) |
+| `test_fara_integration.py` | Fara response parsing | (none) |
+| `test_fara_real.py` | Real LLM calls | `llm` |
+| `test_llm_factory.py` | Factory and discovery | (none) |
+
+**Important:** `test_docker_e2e.py` is the only test that catches issues like missing imports in the production container. Unit tests with mocks won't catch those.
 
 ---
 

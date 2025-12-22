@@ -1,10 +1,18 @@
 """
-Integration tests for Fara visual grounding.
+Fara Response Parsing Tests.
 
-These tests exercise the full path from visual grounder to parsed result
-using realistic Fara responses. They mock the LLM API but test everything else.
+Unit tests for parsing Fara LLM responses into structured results.
+These mock the LLM API and test the parsing/normalization logic.
 
-Run with: pytest tests/test_fara_integration.py -v
+REQUIREMENTS:
+    pip install -e ".[dev]"
+
+RUN:
+    pytest tests/test_fara_integration.py -v
+
+NOTE:
+    These are unit tests with MOCKED LLM calls.
+    For tests with real LLM, see test_fara_real.py.
 """
 
 import base64
@@ -13,6 +21,9 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from PIL import Image
+
+# Skip entire module if surf_mcp not installed
+pytest.importorskip("surf_mcp", reason="Requires: pip install -e '.[dev]'")
 
 from surf_mcp.llm.openai_adapter import OpenAIVisualGrounder
 from surf_mcp.llm.base import LocateResult

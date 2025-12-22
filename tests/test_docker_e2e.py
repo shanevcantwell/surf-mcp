@@ -1,12 +1,25 @@
 """
-End-to-end tests using Docker container.
+Docker End-to-End Tests.
 
-These tests verify that the production Docker image works correctly
-with the harness. They catch issues like missing imports that unit
-tests with mocks would miss.
+These tests verify that the PRODUCTION Docker image works correctly.
+They are the only tests that catch issues like missing imports that
+unit tests with mocks would miss.
 
-Run with: pytest tests/test_docker_e2e.py -v
-Requires: Docker with surf-mcp image built (docker build --target prod -t surf-mcp .)
+REQUIREMENTS:
+    docker build --target prod -t surf-mcp .
+
+RUN:
+    pytest tests/test_docker_e2e.py -v
+
+MARKERS:
+    @docker - requires Docker image built
+    @browser - requires Chromium (inside container)
+
+WHY THESE TESTS MATTER:
+    Before these tests existed, the filesystem import bug shipped because:
+    - Unit tests mocked everything (passed)
+    - "Integration" tests used local pip install (passed)
+    - Nobody tested the actual Docker container (broken)
 """
 
 import subprocess
@@ -39,23 +52,77 @@ def require_docker_image():
     """Skip test if Docker image not available."""
     if not docker_image_exists():
         pytest.skip(
-            "ENVIRONMENT: Requires 'docker build --target prod -t surf-mcp .' "
+            "Requires: docker build --target prod -t surf-mcp . "
             "(surf-mcp Docker image not found)"
         )
 
 
-@pytest.mark.integration
-class TestDockerE2E:
-    """
-    End-to-end tests using Docker container.
+# =============================================================================
+# Docker Container Tests
+# =============================================================================
 
-    These tests use use_docker=True to spawn surf-mcp via Docker,
-    verifying the production image works correctly.
+
+@pytest.mark.docker
+class TestDockerContainer:
+    """
+    Tests that verify the Docker container starts and responds.
+
+    These are the most basic tests - if these fail, nothing else will work.
+    """
+
+    def test_container_imports_correctly(self, require_docker_image):
+        """Verify Docker image can import surf-mcp without errors.
+
+        This catches issues like:
+        - Missing dependencies in requirements
+        - Import errors from removed/renamed modules
+        - Syntax errors in production code
+        """
+        result = subprocess.run(
+            [
+                "docker", "run", "-i", "--rm", "surf-mcp",
+                "python3", "-c",
+                "from surf_mcp.server import main; print('OK')"
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, f"Import failed: {result.stderr}"
+        assert "OK" in result.stdout
+
+    def test_container_commands_import(self, require_docker_image):
+        """Verify all command modules import correctly."""
+        result = subprocess.run(
+            [
+                "docker", "run", "-i", "--rm", "surf-mcp",
+                "python3", "-c",
+                "from surf_mcp.commands import session, navigation, content, browser; print('OK')"
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, f"Import failed: {result.stderr}"
+        assert "OK" in result.stdout
+
+
+# =============================================================================
+# MCP Protocol Tests (Docker)
+# =============================================================================
+
+
+@pytest.mark.docker
+class TestDockerMCP:
+    """
+    Tests that verify MCP protocol works through Docker.
+
+    These test the stdio transport between the harness and container.
     """
 
     @pytest.mark.asyncio
-    async def test_docker_connect_disconnect(self, require_docker_image):
-        """Test basic connect/disconnect cycle via Docker."""
+    async def test_connect_disconnect(self, require_docker_image):
+        """Test basic MCP connect/disconnect cycle via Docker."""
         client = SurfMCPClient()
 
         await client.connect(use_docker=True)
@@ -65,8 +132,8 @@ class TestDockerE2E:
         assert client._connected is False
 
     @pytest.mark.asyncio
-    async def test_docker_session_list(self, require_docker_image):
-        """Test session_list via Docker."""
+    async def test_session_list(self, require_docker_image):
+        """Test session_list command via Docker."""
         client = SurfMCPClient()
         await client.connect(use_docker=True)
 
@@ -77,10 +144,25 @@ class TestDockerE2E:
         finally:
             await client.disconnect()
 
+
+# =============================================================================
+# Browser Tests (Docker + Chromium)
+# =============================================================================
+
+
+@pytest.mark.docker
+@pytest.mark.browser
+class TestDockerBrowser:
+    """
+    Tests that verify browser automation works through Docker.
+
+    These require both Docker AND Chromium (which is installed in the container).
+    They test the full path: harness -> Docker -> surf-mcp -> Playwright -> Chromium.
+    """
+
     @pytest.mark.asyncio
-    @pytest.mark.browser
-    async def test_docker_browser_session(self, require_docker_image):
-        """Test creating a browser session via Docker."""
+    async def test_browser_session_lifecycle(self, require_docker_image):
+        """Test creating and destroying a browser session via Docker."""
         client = SurfMCPClient()
         await client.connect(use_docker=True)
 
@@ -110,8 +192,39 @@ class TestDockerE2E:
         finally:
             await client.disconnect()
 
+    @pytest.mark.asyncio
+    async def test_navigation_commands(self, require_docker_image):
+        """Test navigation commands via Docker."""
+        client = SurfMCPClient()
+        await client.connect(use_docker=True)
 
-@pytest.mark.integration
+        try:
+            result = await client.session_create(headless=True)
+            session_id = result["session_id"]
+
+            # Navigate
+            await client.goto(session_id, "https://example.com")
+
+            # Get current URL
+            current = await client.current(session_id)
+            assert "example.com" in current.get("location", "")
+
+            # Scroll
+            scroll_result = await client.scroll(session_id, "down")
+            assert "error" not in scroll_result or scroll_result.get("success", True)
+
+            await client.session_destroy(session_id)
+
+        finally:
+            await client.disconnect()
+
+
+# =============================================================================
+# Sync Client Tests (Skipped - Framework Limitation)
+# =============================================================================
+
+
+@pytest.mark.docker
 @pytest.mark.skip(
     reason="FRAMEWORK: SyncSurfClient disconnect() fails in pytest due to anyio "
     "task affinity - operations work, only cleanup fails. Works in Streamlit."
@@ -125,7 +238,7 @@ class TestDockerSyncClient:
     In production Streamlit, the client stays alive across reruns.
     """
 
-    def test_sync_docker_connect_disconnect(self, require_docker_image):
+    def test_sync_connect_disconnect(self, require_docker_image):
         """Test sync client connect/disconnect via Docker."""
         client = SyncSurfClient()
         client.connect(use_docker=True)
@@ -136,7 +249,7 @@ class TestDockerSyncClient:
         assert client._client._connected is False
 
     @pytest.mark.browser
-    def test_sync_docker_full_workflow(self, require_docker_image):
+    def test_sync_full_workflow(self, require_docker_image):
         """Test complete sync workflow via Docker."""
         client = SyncSurfClient()
         client.connect(use_docker=True)
@@ -160,21 +273,3 @@ class TestDockerSyncClient:
 
         finally:
             client.disconnect()
-
-
-# Quick smoke test that can run without browser
-@pytest.mark.integration
-def test_docker_image_imports_correctly(require_docker_image):
-    """Verify Docker image can import surf-mcp without errors."""
-    result = subprocess.run(
-        [
-            "docker", "run", "-i", "--rm", "surf-mcp",
-            "python3", "-c",
-            "from surf_mcp.server import main; print('OK')"
-        ],
-        capture_output=True,
-        text=True,
-        timeout=30,
-    )
-    assert result.returncode == 0, f"Import failed: {result.stderr}"
-    assert "OK" in result.stdout

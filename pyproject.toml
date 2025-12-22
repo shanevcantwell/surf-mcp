@@ -59,7 +59,12 @@ warn_required_dynamic_aliases = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
-    "integration: marks tests requiring MCP server (but no LLM)",
-    "browser: marks tests requiring playwright chromium",
-    "live: marks tests hitting real LLM APIs (LM Studio, Gemini, OpenAI) - slow, non-deterministic",
+    # What the test REQUIRES to run:
+    "docker: requires Docker image built (docker build --target prod -t surf-mcp .)",
+    "browser: requires Chromium browser (in Docker container or locally installed)",
+    "llm: requires LLM server running (LM Studio at localhost:1234 or GOOGLE_API_KEY set)",
+
+    # DEPRECATED - use combinations of above instead:
+    "integration: (deprecated) use @pytest.mark.docker instead",
+    "live: (deprecated) use @pytest.mark.llm instead",
 ]

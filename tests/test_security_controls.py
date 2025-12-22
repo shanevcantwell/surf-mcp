@@ -1,15 +1,29 @@
 """
-Tests for Phase 1 Security Controls.
+Security Controls Unit Tests.
 
-Following test-first approach per ADR-001:
-1. URL Allowlist/Blocklist - domain access control
-2. Audit Logging - forensic capability
-3. Rate Limiting - runaway automation prevention
+Unit tests for security features (ADR-001):
+- URL Allowlist/Blocklist - domain access control
+- Audit Logging - forensic capability
+- Rate Limiting - runaway automation prevention
+
+REQUIREMENTS:
+    pip install -e ".[dev]"
+
+RUN:
+    pytest tests/test_security_controls.py -v
+
+NOTE:
+    These are unit tests with MOCKED browsers.
+    They verify security logic, not browser behavior.
+    For real browser security tests, see test_docker_e2e.py.
 """
 
 import pytest
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
+
+# Skip entire module if surf_mcp not installed
+pytest.importorskip("surf_mcp", reason="Requires: pip install -e '.[dev]'")
 
 
 # ============================================================================

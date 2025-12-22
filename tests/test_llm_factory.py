@@ -1,13 +1,26 @@
 """
-Tests for VisualGrounderFactory and FailoverGrounder.
+LLM Factory and Discovery Tests.
 
-Tests the factory pattern for creating visual grounders with
-automatic server discovery and failover.
+Unit tests for VisualGrounderFactory, FailoverGrounder, and
+LM Studio server discovery. All external calls are mocked.
+
+REQUIREMENTS:
+    pip install -e ".[dev]"
+
+RUN:
+    pytest tests/test_llm_factory.py -v
+
+NOTE:
+    These are unit tests with MOCKED server responses.
+    For real LLM tests, see test_fara_real.py.
 """
 
 import os
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+# Skip entire module if surf_mcp not installed
+pytest.importorskip("surf_mcp", reason="Requires: pip install -e '.[dev]'")
 
 from surf_mcp.llm.factory import VisualGrounderFactory, FailoverGrounder
 from surf_mcp.llm.base import LocateResult
