@@ -16,16 +16,16 @@ import pytest
 
 # Import from harness module
 sys.path.insert(0, str(Path(__file__).parent.parent / "tools" / "fara-harness"))
-from mcp_client import NavigatorMCPClient, SyncNavigatorClient
+from mcp_client import SurfMCPClient, SyncSurfClient
 
 
-class TestNavigatorMCPClientUnit:
+class TestSurfMCPClientUnit:
     """Unit tests for MCP client (mocked server)."""
 
     @pytest.mark.asyncio
     async def test_client_not_connected_raises(self):
         """Calling tools without connect raises RuntimeError."""
-        client = NavigatorMCPClient()
+        client = SurfMCPClient()
 
         with pytest.raises(RuntimeError, match="Not connected"):
             await client.call_tool("session_list", {})
@@ -33,7 +33,7 @@ class TestNavigatorMCPClientUnit:
     @pytest.mark.asyncio
     async def test_call_tool_parses_json(self):
         """call_tool parses JSON response correctly."""
-        client = NavigatorMCPClient()
+        client = SurfMCPClient()
         client._connected = True
 
         # Mock session
@@ -55,7 +55,7 @@ class TestNavigatorMCPClientUnit:
     @pytest.mark.asyncio
     async def test_session_create_builds_driver_config(self):
         """session_create builds correct driver config."""
-        client = NavigatorMCPClient()
+        client = SurfMCPClient()
         client._connected = True
 
         mock_content = MagicMock()
@@ -83,12 +83,12 @@ class TestNavigatorMCPClientUnit:
         assert drivers["web"]["storage_state"] == {"cookies": [], "origins": []}
 
 
-class TestSyncNavigatorClient:
+class TestSyncSurfClient:
     """Unit tests for sync wrapper."""
 
     def test_sync_wrapper_creates_loop(self):
-        """SyncNavigatorClient creates event loop."""
-        client = SyncNavigatorClient()
+        """SyncSurfClient creates event loop."""
+        client = SyncSurfClient()
         assert client._loop is not None
         assert isinstance(client._loop, asyncio.AbstractEventLoop)
 
@@ -188,10 +188,10 @@ class TestOverlayDrawing:
 
 @pytest.mark.integration
 class TestMCPServerIntegration:
-    """Integration tests that start actual navigator-mcp server.
+    """Integration tests that start actual surf-mcp server.
 
     These tests are marked as integration and require:
-    - navigator-mcp to be installed
+    - surf-mcp to be installed
     - Playwright chromium (for browser tests)
 
     Run with: pytest -m integration
@@ -199,21 +199,21 @@ class TestMCPServerIntegration:
 
     @pytest.fixture
     def check_server_available(self):
-        """Check if navigator-mcp is available."""
+        """Check if surf-mcp is available."""
         try:
             result = subprocess.run(
-                ["navigator-mcp", "--help"],
+                ["surf-mcp", "--help"],
                 capture_output=True,
                 timeout=5,
             )
             return True
         except (subprocess.TimeoutExpired, FileNotFoundError):
-            pytest.skip("ENVIRONMENT: Requires 'pip install -e .' (navigator-mcp not on PATH)")
+            pytest.skip("ENVIRONMENT: Requires 'pip install -e .' (surf-mcp not on PATH)")
 
     @pytest.mark.asyncio
     async def test_client_connect_disconnect(self, check_server_available):
         """Test basic connect/disconnect cycle."""
-        client = NavigatorMCPClient()
+        client = SurfMCPClient()
 
         await client.connect()
         assert client._connected is True
@@ -224,7 +224,7 @@ class TestMCPServerIntegration:
     @pytest.mark.asyncio
     async def test_session_list_empty(self, check_server_available):
         """Test session_list on fresh server."""
-        client = NavigatorMCPClient()
+        client = SurfMCPClient()
         await client.connect()
 
         try:
@@ -239,7 +239,7 @@ class TestMCPServerIntegration:
         self, check_server_available, temp_workspace
     ):
         """Test creating filesystem session (no playwright needed)."""
-        client = NavigatorMCPClient()
+        client = SurfMCPClient()
         await client.connect()
 
         try:
@@ -301,7 +301,7 @@ class TestBrowserIntegration:
         self, check_playwright_available
     ):
         """Test browser session with storage_state round-trip."""
-        client = NavigatorMCPClient()
+        client = SurfMCPClient()
         await client.connect()
 
         try:
@@ -339,7 +339,7 @@ class TestBrowserIntegration:
     @pytest.mark.asyncio
     async def test_browser_snapshot(self, check_playwright_available):
         """Test taking browser screenshot."""
-        client = NavigatorMCPClient()
+        client = SurfMCPClient()
         await client.connect()
 
         try:
@@ -379,22 +379,22 @@ class TestSyncClientIntegration:
 
     @pytest.fixture
     def check_server_available(self):
-        """Check if navigator-mcp is available."""
+        """Check if surf-mcp is available."""
         import subprocess
 
         try:
             subprocess.run(
-                ["navigator-mcp", "--help"],
+                ["surf-mcp", "--help"],
                 capture_output=True,
                 timeout=5,
             )
             return True
         except (subprocess.TimeoutExpired, FileNotFoundError):
-            pytest.skip("ENVIRONMENT: Requires 'pip install -e .' (navigator-mcp not on PATH)")
+            pytest.skip("ENVIRONMENT: Requires 'pip install -e .' (surf-mcp not on PATH)")
 
     def test_sync_client_connect_disconnect(self, check_server_available):
         """Test sync client connect/disconnect cycle."""
-        client = SyncNavigatorClient()
+        client = SyncSurfClient()
         client.connect()
 
         # Should be connected
@@ -407,7 +407,7 @@ class TestSyncClientIntegration:
         self, check_server_available, temp_workspace
     ):
         """Test sync client with filesystem driver."""
-        client = SyncNavigatorClient()
+        client = SyncSurfClient()
         client.connect()
 
         try:
@@ -480,7 +480,7 @@ class TestFullBrowserWorkflow:
     @pytest.mark.asyncio
     async def test_full_navigation_workflow(self, check_playwright_available):
         """Test complete navigation workflow: create, goto, snapshot, destroy."""
-        client = NavigatorMCPClient()
+        client = SurfMCPClient()
         await client.connect()
 
         try:
@@ -518,7 +518,7 @@ class TestFullBrowserWorkflow:
     @pytest.mark.asyncio
     async def test_browser_scroll(self, check_playwright_available):
         """Test browser scroll functionality."""
-        client = NavigatorMCPClient()
+        client = SurfMCPClient()
         await client.connect()
 
         try:

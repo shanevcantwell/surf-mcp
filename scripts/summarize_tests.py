@@ -99,7 +99,7 @@ def summarize_tests(start_dir: str, output_file: str):
 
 
 if __name__ == "__main__":
-    # Configuration for navigator-mcp
+    # Configuration for surf-mcp
     TEST_DIRECTORY = "tests"
     OUTPUT_MARKDOWN_FILE = "docs/TEST_SUMMARY.md"
 

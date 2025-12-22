@@ -1,5 +1,5 @@
 """
-Security Controls for navigator-mcp.
+Security Controls for surf-mcp.
 
 Phase 1 Controls (per ADR-001):
 - URL Allowlist/Blocklist

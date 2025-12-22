@@ -1,0 +1,26 @@
+%%{init: {'theme': 'dark', 'themeVariables': { 'primaryColor': '#4a9eff', 'primaryTextColor': '#fff', 'primaryBorderColor': '#4a9eff', 'lineColor': '#4a9eff', 'secondaryColor': '#2d3748', 'tertiaryColor': '#1a202c'}}}%%
+sequenceDiagram
+    participant Client as MCP Client
+    participant Surf as surf-mcp
+    participant PW as Playwright
+    participant Fara as Fara-7B
+
+    Client->>Surf: act("click the search button")
+    activate Surf
+
+    Surf->>PW: screenshot()
+    PW-->>Surf: PNG image
+
+    Surf->>Fara: analyze(screenshot, goal)
+    Note right of Fara: Visual grounding
+    Fara-->>Surf: FaraToolCall
+    Note over Surf: action: left_click<br/>coordinate: [624, 280]<br/>confidence: 0.92
+
+    Surf->>PW: click(624, 280)
+    PW-->>Surf: success
+
+    Surf->>PW: screenshot()
+    PW-->>Surf: PNG image
+
+    deactivate Surf
+    Surf-->>Client: Result + screenshot

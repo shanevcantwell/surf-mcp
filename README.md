@@ -21,19 +21,24 @@ The core insight: an AI that can *see* the page doesn't need to parse HTML.
 
 Surf uses **Fara-7B** (Microsoft's agentic vision model) to understand web pages:
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│  Goal → Fara → Action → Result                                      │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  1. BrowserDriver.act("click the search button")                    │
-│  2. → Screenshot captured                                           │
-│  3. → Fara analyzes screenshot + goal                               │
-│  4. → Returns FaraToolCall{action="left_click", coordinate=(624,280)}│
-│  5. → PlaywrightExecutor.execute() runs the action                  │
-│  6. → Result returned to caller                                     │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
+```mermaid
+sequenceDiagram
+    participant Client as MCP Client
+    participant Surf as surf-mcp
+    participant PW as Playwright
+    participant Fara as Fara-7B
+
+    Client->>Surf: act("click the search button")
+    activate Surf
+    Surf->>PW: screenshot()
+    PW-->>Surf: PNG image
+    Surf->>Fara: analyze(image, goal)
+    Note right of Fara: Visual grounding
+    Fara-->>Surf: FaraToolCall{left_click, [624,280]}
+    Surf->>PW: click(624, 280)
+    PW-->>Surf: done
+    deactivate Surf
+    Surf-->>Client: Result + new screenshot
 ```
 
 ### Supported Actions

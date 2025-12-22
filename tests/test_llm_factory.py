@@ -20,7 +20,7 @@ class TestVisualGrounderFactory:
     @pytest.mark.asyncio
     async def test_create_returns_openai_adapter_by_default(self):
         """Factory creates OpenAI adapter when no provider specified."""
-        with patch.dict(os.environ, {"NAVIGATOR_LLM_PROVIDER": "openai"}, clear=False):
+        with patch.dict(os.environ, {"SURF_LLM_PROVIDER": "openai"}, clear=False):
             with patch(
                 "surf_mcp.llm.factory.discover_fara_server",
                 new_callable=AsyncMock,

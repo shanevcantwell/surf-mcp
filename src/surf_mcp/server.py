@@ -1,11 +1,11 @@
 """
-Navigator MCP Server - Main entrypoint.
+Surf MCP Server - Main entrypoint.
 
-Unified MCP server for persistent navigation across filesystem and browser domains.
+MCP server for visual browser automation via Fara.
 Provides JSON-RPC over stdio interface for MCP clients.
 
 Usage:
-    navigator-mcp  # Starts server on stdio
+    surf-mcp  # Starts server on stdio
 """
 
 import asyncio
@@ -18,7 +18,7 @@ from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 
 from .session_manager import SessionManager
-from .commands import session, navigation, content, filesystem, browser
+from .commands import session, navigation, content, browser
 
 # Configure logging
 logging.basicConfig(
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 session_manager = SessionManager()
 
 # Create MCP server
-server = Server("navigator-mcp")
+server = Server("surf-mcp")
 
 
 # =============================================================================
@@ -49,11 +49,8 @@ async def list_tools() -> List[Tool]:
     # Universal navigation tools
     tools.extend(navigation.get_tools())
 
-    # Content tools (read, write, list, snapshot)
+    # Content tools (read, list, snapshot)
     tools.extend(content.get_tools())
-
-    # Filesystem-specific tools
-    tools.extend(filesystem.get_tools())
 
     # Browser-specific tools
     tools.extend(browser.get_tools())
@@ -99,18 +96,6 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
         elif name == "snapshot":
             result = await content.snapshot(session_manager, arguments)
 
-        # Filesystem-specific
-        elif name == "write":
-            result = await filesystem.write(session_manager, arguments)
-        elif name == "delete":
-            result = await filesystem.delete(session_manager, arguments)
-        elif name == "copy":
-            result = await filesystem.copy(session_manager, arguments)
-        elif name == "move":
-            result = await filesystem.move(session_manager, arguments)
-        elif name == "find":
-            result = await filesystem.find(session_manager, arguments)
-
         # Browser-specific
         elif name == "locate":
             result = await browser.locate(session_manager, arguments)
@@ -147,14 +132,14 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
 
 async def run_server():
     """Run the MCP server."""
-    logger.info("Starting Navigator MCP server...")
+    logger.info("Starting Surf MCP server...")
 
     try:
         async with stdio_server() as (read_stream, write_stream):
             await server.run(read_stream, write_stream, server.create_initialization_options())
     finally:
         await session_manager.cleanup_all()
-        logger.info("Navigator MCP server shutdown complete")
+        logger.info("Surf MCP server shutdown complete")
 
 
 def main():

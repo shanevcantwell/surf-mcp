@@ -227,7 +227,7 @@ class SurfMCPClient:
         Per ADR-005: Fara decides what action to take, returns full tool_call.
 
         Returns:
-            NavigatorState with fara_action, coordinate, confidence
+            Result with fara_action, coordinate, confidence, reasoning
         """
         return await self.call_tool("act", {
             "session_id": session_id,
