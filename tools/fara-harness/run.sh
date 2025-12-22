@@ -1,6 +1,6 @@
 #!/bin/bash
 # Fara Test Harness launcher
-# Checks dependencies and runs the Streamlit app
+# Creates a virtual environment if needed, installs dependencies, and runs Streamlit
 
 set -e
 
@@ -15,55 +15,28 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-# Check if in virtualenv, warn if not
+# Create venv if not in one and .venv doesn't exist
+VENV_DIR="$SCRIPT_DIR/.venv"
 if [ -z "$VIRTUAL_ENV" ]; then
-    echo "Warning: Not in a virtual environment"
+    if [ ! -d "$VENV_DIR" ]; then
+        echo "Creating virtual environment..."
+        python3 -m venv "$VENV_DIR"
+    fi
+    echo "Activating virtual environment..."
+    source "$VENV_DIR/bin/activate"
 fi
 
-# Check/install pip dependencies
+# Install harness dependencies (streamlit, pillow, mcp client)
 echo "Checking dependencies..."
 if ! python3 -c "import streamlit" 2>/dev/null; then
     echo "Installing harness dependencies..."
-    pip install -r requirements.txt
+    pip install -q -r requirements.txt
 fi
 
-if ! python3 -c "import mcp" 2>/dev/null; then
-    echo "Installing MCP SDK..."
-    pip install mcp
-fi
-
-# Check Playwright package
-if ! python3 -c "import playwright" 2>/dev/null; then
-    echo "Installing Playwright..."
-    pip install playwright
-fi
-
-# Check Playwright chromium browser binary
-CHROMIUM_CHECK=$(python3 -c "
-from playwright.sync_api import sync_playwright
-try:
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        browser.close()
-    print('ok')
-except Exception as e:
-    if 'Executable' in str(e):
-        print('missing')
-    else:
-        print('error: ' + str(e))
-" 2>&1)
-
-if [ "$CHROMIUM_CHECK" = "missing" ]; then
-    echo "Installing Playwright Chromium browser..."
-    playwright install chromium
-elif [ "$CHROMIUM_CHECK" != "ok" ]; then
-    echo "Warning: Playwright check returned: $CHROMIUM_CHECK"
-fi
-
-# Check surf-mcp is available
+# Install surf-mcp (the MCP server we'll connect to)
 if ! command -v surf-mcp &> /dev/null; then
-    echo "Warning: surf-mcp not in PATH"
-    echo "Install with: pip install -e /path/to/surf-mcp"
+    echo "Installing surf-mcp..."
+    pip install -q -e "$SCRIPT_DIR/../.."
 fi
 
 echo ""

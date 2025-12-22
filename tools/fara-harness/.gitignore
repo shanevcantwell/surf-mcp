@@ -5,3 +5,6 @@ storage_state.json
 # Python
 __pycache__/
 *.pyc
+
+# Virtual environment created by run.sh
+.venv/
