@@ -93,15 +93,44 @@ sequenceDiagram
 
 ## Installation
 
+### From Source (Recommended for Development)
+
 ```bash
-# Install from source
+# Clone the repo
+git clone https://github.com/shanevcantwell/surf-mcp.git
+cd surf-mcp
+
+# Install in editable mode
 pip install -e .
 
 # Install Playwright browsers
 playwright install chromium
 
-# Optional: Install harness dependencies
-pip install -e ".[harness]"
+# Verify installation
+surf-mcp --help
+```
+
+### From Git (For Consuming in Other Projects)
+
+```bash
+# Install directly from git
+pip install git+https://github.com/shanevcantwell/surf-mcp.git
+
+# Or pin to a specific version
+pip install git+https://github.com/shanevcantwell/surf-mcp.git@v0.5.0-alpha
+
+# Install Playwright browsers
+playwright install chromium
+```
+
+### Docker (For Isolated Deployment)
+
+```bash
+docker build -t surf-mcp .
+docker run -it --rm \
+  --add-host=host.docker.internal:host-gateway \
+  -e LMSTUDIO_SERVERS="default=http://host.docker.internal:1234/v1" \
+  surf-mcp
 ```
 
 ## Quick Start
@@ -118,22 +147,6 @@ Add to your MCP client configuration:
     }
   }
 }
-```
-
-### Docker
-
-```bash
-# Build the image
-docker build -t surf-mcp .
-
-# Run with LM Studio on host
-docker run -it --rm \
-  --add-host=host.docker.internal:host-gateway \
-  -e LMSTUDIO_SERVERS="default=http://host.docker.internal:1234/v1" \
-  surf-mcp
-
-# Or use docker-compose
-docker-compose up -d
 ```
 
 ### Fara Test Harness
