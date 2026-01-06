@@ -192,6 +192,10 @@ def get_tools() -> List[Tool]:
                         "type": "string",
                         "description": "Natural language goal to achieve autonomously",
                     },
+                    "max_steps": {
+                        "type": "integer",
+                        "description": "Maximum steps before giving up (default: FARA_MAX_AGENT_STEPS env var or 20)",
+                    },
                 },
                 "required": ["session_id", "driver", "goal"],
             },
@@ -318,7 +322,9 @@ async def act_autonomous(manager: SessionManager, args: Dict[str, Any]) -> Dict[
     if not goal:
         return {"error": "goal required"}
 
+    max_steps = args.get("max_steps")  # None = use default from env/AgentRunner
+
     # Note: progress_callback is not wired up here yet.
     # Future: Wire MCP progress notifications when supported.
-    result = await driver.act_autonomous(goal=goal)
+    result = await driver.act_autonomous(goal=goal, max_steps=max_steps)
     return result

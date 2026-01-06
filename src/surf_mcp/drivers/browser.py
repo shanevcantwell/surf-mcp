@@ -529,6 +529,7 @@ class BrowserDriver(NavigatorDriver):
     async def act_autonomous(
         self,
         goal: str,
+        max_steps: Optional[int] = None,
         progress_callback: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
@@ -539,6 +540,7 @@ class BrowserDriver(NavigatorDriver):
 
         Args:
             goal: Natural language goal to achieve
+            max_steps: Maximum steps (default: from FARA_MAX_AGENT_STEPS env var or 20)
             progress_callback: Optional async callback(step, total, message)
 
         Returns:
@@ -564,6 +566,7 @@ class BrowserDriver(NavigatorDriver):
         runner = AgentRunner(
             grounder=self.grounder,
             executor=self._executor,
+            max_steps=max_steps,
         )
 
         result = await runner.run(

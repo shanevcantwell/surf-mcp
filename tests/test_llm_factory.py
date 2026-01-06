@@ -10,7 +10,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from surf_mcp.llm.factory import VisualGrounderFactory, FailoverGrounder
-from surf_mcp.llm.base import LocateResult
+from surf_mcp.llm.base import FaraToolCall, LocateResult, StepContext
 from surf_mcp.llm.lmstudio_discovery import ModelInfo, ServerInfo
 
 
@@ -174,6 +174,118 @@ class TestFailoverGrounder:
             result = await failover_grounder.verify("button", "screenshot_b64")
 
             assert result.found is True
+
+    @pytest.mark.asyncio
+    async def test_get_action_success(self, failover_grounder):
+        """get_action delegates to adapter and returns FaraToolCall."""
+        mock_result = FaraToolCall(
+            action="left_click",
+            coordinate=(100, 200),
+            confidence=0.95,
+            reasoning="Found the button",
+        )
+
+        with patch.object(
+            failover_grounder,
+            "_create_adapter",
+            return_value=MagicMock(get_action=AsyncMock(return_value=mock_result)),
+        ):
+            result = await failover_grounder.get_action("click button", "screenshot_b64")
+
+            assert result.action == "left_click"
+            assert result.coordinate == (100, 200)
+            assert result.confidence == 0.95
+
+    @pytest.mark.asyncio
+    async def test_get_action_with_context_delegates_to_adapter(self, failover_grounder):
+        """get_action_with_context delegates to adapter with history."""
+        mock_result = FaraToolCall(
+            action="type",
+            coordinate=(150, 250),
+            text="hello",
+            confidence=0.9,
+            reasoning="Typing in the field",
+        )
+
+        history = [
+            StepContext(
+                screenshot_b64="prev_screenshot",
+                action="[1] left_click at (100, 200) ✓",
+                reasoning="Clicked the input",
+                success=True,
+            ),
+        ]
+
+        # Mock adapter with get_action_with_context
+        mock_adapter = MagicMock()
+        mock_adapter.get_action_with_context = AsyncMock(return_value=mock_result)
+
+        with patch.object(
+            failover_grounder, "_create_adapter", return_value=mock_adapter
+        ):
+            result = await failover_grounder.get_action_with_context(
+                "type hello", "screenshot_b64", history=history
+            )
+
+            assert result.action == "type"
+            assert result.text == "hello"
+            # Verify history was passed through
+            mock_adapter.get_action_with_context.assert_called_once_with(
+                "type hello", "screenshot_b64", history=history
+            )
+
+    @pytest.mark.asyncio
+    async def test_get_action_with_context_falls_back_without_method(self, failover_grounder):
+        """get_action_with_context falls back to get_action if adapter lacks method."""
+        mock_result = FaraToolCall(
+            action="scroll",
+            direction="down",
+            confidence=0.8,
+        )
+
+        # Mock adapter WITHOUT get_action_with_context
+        mock_adapter = MagicMock(spec=["get_action"])  # Only has get_action
+        mock_adapter.get_action = AsyncMock(return_value=mock_result)
+
+        with patch.object(
+            failover_grounder, "_create_adapter", return_value=mock_adapter
+        ):
+            result = await failover_grounder.get_action_with_context(
+                "scroll down", "screenshot_b64", history=[]
+            )
+
+            assert result.action == "scroll"
+            mock_adapter.get_action.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_get_action_with_context_retries_on_failure(self, failover_grounder):
+        """get_action_with_context retries with next server on failure."""
+        mock_success = FaraToolCall(action="terminate", confidence=1.0)
+
+        # First adapter fails, second succeeds
+        failing_adapter = MagicMock()
+        failing_adapter.get_action_with_context = AsyncMock(
+            side_effect=Exception("Server down")
+        )
+        working_adapter = MagicMock()
+        working_adapter.get_action_with_context = AsyncMock(return_value=mock_success)
+
+        call_count = 0
+
+        def create_adapter(url, model):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return failing_adapter
+            return working_adapter
+
+        with patch.object(failover_grounder, "_create_adapter", side_effect=create_adapter):
+            result = await failover_grounder.get_action_with_context(
+                "goal", "screenshot_b64", history=[]
+            )
+
+            assert result.action == "terminate"
+            assert call_count == 2  # Tried twice
 
 
 class TestLMStudioDiscovery:
@@ -473,3 +585,65 @@ class TestServerParsing:
             ids = get_fara_model_ids()
 
             assert ids == ["model-a", "model-b", "model-c"]
+
+
+class TestUniformScaling:
+    """Tests for proportional (non-anamorphic) image scaling."""
+
+    @pytest.fixture
+    def grounder(self):
+        """Create OpenAI grounder for testing."""
+        from surf_mcp.llm.openai_adapter import OpenAIVisualGrounder
+        return OpenAIVisualGrounder()
+
+    def test_scale_coordinates_uniform_landscape(self, grounder):
+        """Scaling uses uniform factor for landscape images."""
+        # Original: 1920x1080, native bounds: 1428x896
+        # Scale to fit: min(1428/1920, 896/1080) = min(0.744, 0.830) = 0.744
+        # Fara sees image at ~1428x803 (width-limited)
+        # Coordinate (714, 400) in scaled -> (714/0.744, 400/0.744) = (960, 538)
+        original_size = (1920, 1080)
+        native_size = (1428, 896)
+
+        x, y = grounder._scale_coordinates(714, 400, original_size, native_size)
+
+        # Uniform scaling: same factor for both axes
+        expected_scale = min(1428 / 1920, 896 / 1080)  # 0.74375
+        expected_x = int(714 / expected_scale)  # ~960
+        expected_y = int(400 / expected_scale)  # ~538
+
+        assert x == expected_x
+        assert y == expected_y
+        # Both should use same inverse factor
+        assert abs(x / 714 - y / 400) < 0.01  # Same ratio
+
+    def test_scale_coordinates_uniform_tall_image(self, grounder):
+        """Scaling uses uniform factor for height-limited images."""
+        # Original: 1200x1800 (portrait), native bounds: 896x1428
+        # Scale to fit: min(896/1200, 1428/1800) = min(0.747, 0.793) = 0.747
+        original_size = (1200, 1800)
+        native_size = (896, 1428)
+
+        x, y = grounder._scale_coordinates(448, 714, original_size, native_size)
+
+        expected_scale = min(896 / 1200, 1428 / 1800)
+        expected_x = int(448 / expected_scale)
+        expected_y = int(714 / expected_scale)
+
+        assert x == expected_x
+        assert y == expected_y
+
+    def test_scale_coordinates_no_distortion(self, grounder):
+        """Verify aspect ratio preserved in coordinate transform."""
+        # Wide image: 2401x1121 (aspect ~2.14)
+        # Native: 1428x896 (aspect ~1.59)
+        # Old code would stretch differently in X vs Y
+        original_size = (2401, 1121)
+        native_size = (1428, 896)
+
+        # Point at center of scaled image
+        x, y = grounder._scale_coordinates(714, 448, original_size, native_size)
+
+        # Ratio should be preserved (same scale factor)
+        scale = min(1428 / 2401, 896 / 1121)  # ~0.595
+        assert abs(x / 714 - y / 448) < 0.01

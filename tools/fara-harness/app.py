@@ -73,9 +73,12 @@ def init_session_state():
         st.session_state.last_act = None
     if "last_act_auto" not in st.session_state:
         st.session_state.last_act_auto = None
-    # Multi-step autonomous mode toggle
+    # Multi-step autonomous mode toggle (default: True)
     if "autonomous_mode" not in st.session_state:
-        st.session_state.autonomous_mode = False
+        st.session_state.autonomous_mode = True
+    # Max steps for autonomous mode
+    if "max_steps" not in st.session_state:
+        st.session_state.max_steps = 20
     # Step viewer for autonomous mode
     if "step_viewer_index" not in st.session_state:
         st.session_state.step_viewer_index = 0
@@ -157,15 +160,16 @@ def execute_command_autonomous(command: str):
 
     Fara loops until task complete (terminate) or max steps.
     """
-    add_to_history(f"🔄 {command}")
+    max_steps = st.session_state.max_steps
+    add_to_history(f"🔄 {command} (max {max_steps} steps)")
     add_to_history("  [Autonomous mode - running until complete...]")
 
     try:
         client = st.session_state.client
         session_id = st.session_state.session_id
 
-        # Multi-step execution
-        result = client.act_autonomous(session_id, command)
+        # Multi-step execution with max_steps from UI
+        result = client.act_autonomous(session_id, command, max_steps=max_steps)
         st.session_state.last_act_auto = result
         st.session_state.step_viewer_index = 0  # Reset to first step
 
@@ -214,20 +218,6 @@ def main():
 
     # ==================== Command Input (Top - Enter submits) ====================
     if st.session_state.connected:
-        # Mode toggle above command input
-        col_mode, col_mode_label = st.columns([1, 5])
-        with col_mode:
-            st.session_state.autonomous_mode = st.toggle(
-                "🔄",
-                value=st.session_state.autonomous_mode,
-                help="Autonomous Mode: Loop until task complete (for multi-step goals)"
-            )
-        with col_mode_label:
-            if st.session_state.autonomous_mode:
-                st.caption("**Autonomous** - multi-step until complete")
-            else:
-                st.caption("**Single-step** - one action per command")
-
         with st.form(key="command_form", clear_on_submit=True):
             col_input, col_submit = st.columns([5, 1])
             with col_input:
@@ -242,7 +232,7 @@ def main():
                     label_visibility="collapsed",
                 )
             with col_submit:
-                submitted = st.form_submit_button("↵", use_container_width=True)
+                submitted = st.form_submit_button("↵", width="stretch")
 
             if submitted and command:
                 execute_command(command)
@@ -268,7 +258,7 @@ def main():
                             confidence=loc.get("confidence"),
                         )
 
-                st.image(img, use_container_width=True)
+                st.image(img, width="stretch")
             except Exception as e:
                 st.error(f"Failed to display screenshot: {e}")
         elif st.session_state.connected:
@@ -290,7 +280,7 @@ def main():
                     idx = max(0, min(idx, len(steps) - 1))
 
                     with col_prev:
-                        if st.button("◀ Prev", disabled=(idx == 0), use_container_width=True):
+                        if st.button("◀ Prev", disabled=(idx == 0), width="stretch"):
                             st.session_state.step_viewer_index = idx - 1
                             st.rerun()
 
@@ -302,7 +292,7 @@ def main():
                         st.markdown(f"**Step {idx + 1}/{len(steps)}**: `{action}` {status}")
 
                     with col_next:
-                        if st.button("Next ▶", disabled=(idx >= len(steps) - 1), use_container_width=True):
+                        if st.button("Next ▶", disabled=(idx >= len(steps) - 1), width="stretch"):
                             st.session_state.step_viewer_index = idx + 1
                             st.rerun()
 
@@ -331,7 +321,7 @@ def main():
                             # Draw overlay for click actions
                             if coord and step.get("action") in ("left_click", "click", "type"):
                                 step_img = draw_overlay(step_img, x=coord[0], y=coord[1])
-                            st.image(step_img, caption=f"Step {idx + 1} screenshot", use_container_width=True)
+                            st.image(step_img, caption=f"Step {idx + 1} screenshot", width="stretch")
                         except Exception as e:
                             st.caption(f"(Screenshot not available: {e})")
                     else:
@@ -344,7 +334,7 @@ def main():
             st.subheader("Connect")
             headless = st.checkbox("Headless mode", value=True)
 
-            if st.button("Connect", use_container_width=True):
+            if st.button("Connect", width="stretch"):
                 try:
                     client = SyncSurfClient()
                     client.connect()
@@ -371,7 +361,7 @@ def main():
             st.subheader("Navigate")
             with st.form(key="nav_form", clear_on_submit=False):
                 url = st.text_input("URL", value=DEFAULT_URL, label_visibility="collapsed")
-                if st.form_submit_button("Go", use_container_width=True):
+                if st.form_submit_button("Go", width="stretch"):
                     try:
                         result = st.session_state.client.goto(
                             st.session_state.session_id, url
@@ -385,10 +375,25 @@ def main():
                         add_to_history(f"  ✗ Error: {e}")
                     st.rerun()
 
+            # Autonomous mode controls
+            st.session_state.autonomous_mode = st.checkbox(
+                "🔄 Autonomous",
+                value=st.session_state.autonomous_mode,
+                help="Multi-step execution until task complete",
+            )
+            if st.session_state.autonomous_mode:
+                st.session_state.max_steps = st.number_input(
+                    "Max steps",
+                    min_value=1,
+                    max_value=100,
+                    value=st.session_state.max_steps,
+                    help="Maximum steps before giving up",
+                )
+
             # Quick actions (direct MCP calls)
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("↑", use_container_width=True, help="Scroll up"):
+                if st.button("↑", width="stretch", help="Scroll up"):
                     try:
                         st.session_state.client.scroll(st.session_state.session_id, "up")
                         add_to_history("  ✓ Scrolled up")
@@ -397,7 +402,7 @@ def main():
                         add_to_history(f"  ✗ Error: {e}")
                     st.rerun()
             with col2:
-                if st.button("↓", use_container_width=True, help="Scroll down"):
+                if st.button("↓", width="stretch", help="Scroll down"):
                     try:
                         st.session_state.client.scroll(st.session_state.session_id, "down")
                         add_to_history("  ✓ Scrolled down")
@@ -406,7 +411,7 @@ def main():
                         add_to_history(f"  ✗ Error: {e}")
                     st.rerun()
 
-            if st.button("🔄 Refresh", use_container_width=True):
+            if st.button("🔄 Refresh", width="stretch"):
                 refresh_screenshot()
                 add_to_history("✓ Screenshot refreshed")
                 st.rerun()
@@ -414,7 +419,7 @@ def main():
             st.divider()
 
             # Disconnect
-            if st.button("Disconnect", use_container_width=True, type="secondary"):
+            if st.button("Disconnect", width="stretch", type="secondary"):
                 try:
                     result = st.session_state.client.session_destroy(
                         st.session_state.session_id

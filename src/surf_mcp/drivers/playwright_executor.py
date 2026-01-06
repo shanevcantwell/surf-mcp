@@ -10,7 +10,9 @@ Supported actions:
 - scroll: Scroll page up/down
 - key: Press keyboard keys
 - visit_url: Navigate to URL (with domain filter check)
+- history_back: Go back in browser history
 - terminate: Task complete signal (no-op)
+- wait: Wait for page to load
 """
 
 from __future__ import annotations
@@ -37,6 +39,7 @@ SUPPORTED_ACTIONS = frozenset([
     "visit_url",
     "terminate",
     "wait",
+    "history_back",
 ])
 
 
@@ -218,6 +221,10 @@ class PlaywrightExecutor:
                 case "wait":
                     # Simple wait action - wait for network idle
                     await page.wait_for_load_state("networkidle", timeout=5000)
+
+                case "history_back":
+                    # Navigate back in browser history
+                    await page.go_back(wait_until="domcontentloaded", timeout=10000)
 
                 case _:
                     # Fail fast for unknown actions

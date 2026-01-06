@@ -57,6 +57,21 @@ FARA_MAX_FAILURES=2
 FARA_PROBE_TIMEOUT=2.0
 ```
 
+### Autonomous Mode (ADR-006)
+Multi-step execution via `act_autonomous` with:
+- **Multi-screenshot context**: Last N screenshots sent to Fara for visual continuity
+- **ReAct history**: Text-based action history with success/failure markers
+- **Configurable steps**: Adjust `FARA_MAX_AGENT_STEPS` for complex flows
+
+Configure in `.env`:
+```bash
+FARA_MAX_AGENT_STEPS=20          # Max steps before giving up
+FARA_CONTEXT_SCREENSHOTS=3       # Screenshots in context (default 3)
+# FARA_SYSTEM_PROMPT_FILE=/path/to/prompt.txt  # Override system prompt
+```
+
+**Known limitations**: Date pickers with multiple dropdowns may struggle. Use specific instructions or break into smaller steps.
+
 ---
 
 ## Installation & Running

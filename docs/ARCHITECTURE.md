@@ -116,6 +116,21 @@ class ExecutionResult:
     new_page: Optional[Page]  # If click opened new tab
 ```
 
+### StepContext
+
+Context from a previous step for multi-screenshot reasoning:
+
+```python
+@dataclass
+class StepContext:
+    screenshot_b64: str   # Screenshot BEFORE action
+    action: str           # e.g., "[1] left_click at (642, 97) ✓"
+    reasoning: str = ""   # Fara's chain-of-thought
+    success: bool = True  # Whether action succeeded
+```
+
+Per Fara-7B docs, the model expects "latest screenshots" and "full history of previous thoughts and actions" for optimal multi-step performance.
+
 ### Session Manager
 
 Location: `src/surf_mcp/session_manager.py`
@@ -201,14 +216,16 @@ Autonomous multi-step Fara execution with progress streaming.
 
 **Flow:**
 ```
-Goal → Screenshot → Fara → Execute → Repeat → (terminate) → Done
+Goal → Screenshot → Fara (with history) → Execute → Repeat → (terminate) → Done
 ```
 
 **Features:**
+- **Multi-screenshot context**: Sends last N screenshots (configurable via `FARA_CONTEXT_SCREENSHOTS`, default 3) plus action history to Fara for better reasoning
 - MCP progress notifications via callback
 - Cancellation support between steps
-- Configurable max steps (FARA_MAX_AGENT_STEPS, default 20)
-- Step history tracking (AgentStep records)
+- Configurable max steps (`FARA_MAX_AGENT_STEPS`, default 20)
+- Step history tracking (AgentStep records with screenshots)
+- ReAct-style history formatting: `[1] left_click at (642, 97) ✓`
 
 ---
 
@@ -225,9 +242,16 @@ class VisualGrounder(ABC):
     async def locate(description: str, screenshot_b64: str) -> LocateResult
     async def verify(description: str, screenshot_b64: str) -> LocateResult
     async def get_action(goal: str, screenshot_b64: str) -> FaraToolCall
+    async def get_action_with_context(
+        goal: str,
+        screenshot_b64: str,
+        history: Optional[List[StepContext]] = None
+    ) -> FaraToolCall
 ```
 
-The key method is `get_action()` (ADR-005) which returns a complete FaraToolCall rather than just coordinates.
+The key methods for autonomous mode:
+- `get_action()` (ADR-005): Returns complete FaraToolCall for single-step execution
+- `get_action_with_context()`: Multi-screenshot version that includes action history for better multi-step reasoning
 
 ### Adapters
 
@@ -462,6 +486,9 @@ See [tools/fara-harness/CHEATSHEET.md](../tools/fara-harness/CHEATSHEET.md) for 
 | `FARA_MIN_CONFIDENCE` | `0.7` | Retry threshold for low confidence |
 | `FARA_CONFIDENCE_RETRIES` | `2` | Max retries for low confidence actions |
 | `FARA_MAX_AGENT_STEPS` | `20` | Max steps in autonomous mode |
+| `FARA_CONTEXT_SCREENSHOTS` | `3` | Screenshots to include in context |
+| `FARA_SYSTEM_PROMPT` | - | Override system prompt (inline) |
+| `FARA_SYSTEM_PROMPT_FILE` | - | Override system prompt (file path) |
 | `SURF_BROWSER_HEADLESS` | `true` | Browser visibility |
 | `SURF_BROWSER_VIEWPORT_WIDTH` | `1920` | Viewport width |
 | `SURF_BROWSER_VIEWPORT_HEIGHT` | `1080` | Viewport height |
@@ -525,9 +552,11 @@ surf-mcp/
 │       ├── ADR-001_Agentic_Browser_Security.md  # Phase 1 Complete
 │       ├── ADR-002_Strategy_Architecture.md     # Proposed
 │       ├── ADR-004_Compact_Storage_State.md     # Deferred
+│       ├── ADR-007_Streaming_Step_Progress.md   # Deferred
 │       └── complete/
 │           ├── ADR-003_Fara_Test_Harness.md     # Complete
-│           └── ADR-005_Direct_Fara_Execution.md # Complete
+│           ├── ADR-005_Direct_Fara_Execution.md # Complete
+│           └── ADR-006_Multi_Screenshot_Context.md  # Complete
 ├── pyproject.toml
 ├── Dockerfile
 ├── docker-compose.yml

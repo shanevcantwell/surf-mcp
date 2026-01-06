@@ -89,6 +89,7 @@ sequenceDiagram
 | `visit_url` | Navigate to URL |
 | `terminate` | Task complete signal (agent mode) |
 | `wait` | Wait for page to load |
+| `history_back` | Navigate back in browser history |
 
 ## Installation
 
@@ -211,6 +212,11 @@ FARA_PROBE_TIMEOUT=2.0
 FARA_MIN_CONFIDENCE=0.7
 FARA_CONFIDENCE_RETRIES=2
 FARA_MAX_AGENT_STEPS=20
+FARA_CONTEXT_SCREENSHOTS=3
+
+# System prompt override (for advanced tuning)
+# FARA_SYSTEM_PROMPT="Your custom prompt..."
+# FARA_SYSTEM_PROMPT_FILE=/path/to/prompt.txt
 
 # Alternative: Single OpenAI-compatible endpoint
 OPENAI_API_KEY=lm-studio
@@ -244,6 +250,37 @@ Behavior:
 - **Auto-discovery**: Probes each server's `/v1/models` to find loaded Fara model
 - **Prefer loaded**: Prioritizes servers with Fara already in VRAM
 - **Failover**: Automatically retries on another server if one fails
+
+### Autonomous Mode
+
+`act_autonomous` runs Fara in a loop until the task completes or max steps is reached.
+
+**Multi-screenshot context**: Each step includes the last 3 screenshots (configurable via `FARA_CONTEXT_SCREENSHOTS`) so Fara can see what changed between actions.
+
+**Tips for best results**:
+
+1. **Be specific**: "Click the blue Submit button" works better than "submit the form"
+2. **Break down complex tasks**: Instead of "fill out the form and submit", try "fill in the name field with John, then the email with john@example.com"
+3. **Increase max steps for complex flows**: Set `FARA_MAX_AGENT_STEPS=30` for multi-page workflows
+4. **Watch for loops**: If Fara clicks the same element repeatedly (dropdown toggles), it may need more specific instructions
+
+**Known limitations**:
+- **CAPTCHAs and bot detection**: Sites with Cloudflare, reCAPTCHA, or similar protections will detect and block automated access. Modern CAPTCHAs analyze mouse movement patterns - Playwright's `click(x, y)` teleports the cursor without realistic motion paths, which is easily detected. This is a fundamental limitation of screenshot-based automation.
+- Date picker dropdowns can be tricky - Fara may toggle instead of selecting a value
+- Complex multi-dropdown widgets (month/day/year selects) may need manual intervention
+- Very long forms may exceed the step limit
+
+**System prompt tuning**: For advanced use cases, override the system prompt:
+
+```bash
+# File-based (recommended for multi-line prompts)
+FARA_SYSTEM_PROMPT_FILE=/path/to/custom_prompt.txt
+
+# Inline
+FARA_SYSTEM_PROMPT="Your custom instructions..."
+```
+
+Priority: File > Inline > Default
 
 ## MCP Tools
 

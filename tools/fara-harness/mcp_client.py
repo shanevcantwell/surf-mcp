@@ -235,18 +235,31 @@ class SurfMCPClient:
             "goal": goal,
         })
 
-    async def act_autonomous(self, session_id: str, goal: str) -> Dict[str, Any]:
+    async def act_autonomous(
+        self,
+        session_id: str,
+        goal: str,
+        max_steps: Optional[int] = None,
+    ) -> Dict[str, Any]:
         """
         Execute goal autonomously with multi-step Fara loop.
+
+        Args:
+            session_id: Session ID
+            goal: Natural language goal to achieve
+            max_steps: Maximum steps (default: server default from env var)
 
         Returns:
             {success, step_count, steps[], final_screenshot, reason}
         """
-        return await self.call_tool("act_autonomous", {
+        args: Dict[str, Any] = {
             "session_id": session_id,
             "driver": "web",
             "goal": goal,
-        })
+        }
+        if max_steps is not None:
+            args["max_steps"] = max_steps
+        return await self.call_tool("act_autonomous", args)
 
 
 class SyncSurfClient:
@@ -317,5 +330,10 @@ class SyncSurfClient:
     def act(self, session_id: str, goal: str) -> Dict[str, Any]:
         return self._run(self._client.act(session_id, goal))
 
-    def act_autonomous(self, session_id: str, goal: str) -> Dict[str, Any]:
-        return self._run(self._client.act_autonomous(session_id, goal))
+    def act_autonomous(
+        self,
+        session_id: str,
+        goal: str,
+        max_steps: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        return self._run(self._client.act_autonomous(session_id, goal, max_steps))

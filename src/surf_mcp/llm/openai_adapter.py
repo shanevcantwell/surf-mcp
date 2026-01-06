@@ -23,9 +23,52 @@ from PIL import Image
 if TYPE_CHECKING:
     from openai import AsyncOpenAI
 
-from .base import FaraToolCall, LocateResult, VisualGrounder
+from .base import FaraToolCall, LocateResult, StepContext, VisualGrounder
 
 logger = logging.getLogger(__name__)
+
+# Fara-7B system prompt (from HuggingFace model card)
+# Override via FARA_SYSTEM_PROMPT env var or file path in FARA_SYSTEM_PROMPT_FILE
+DEFAULT_FARA_SYSTEM_PROMPT = """You are a web automation agent that performs actions on websites to fulfill user requests by calling various tools.
+
+You should stop execution at **Critical Points**. A Critical Point occurs in tasks like:
+
+* Checkout
+* Book
+* Purchase
+* Call
+* Email
+* Order
+
+A Critical Point requires the user's permission or personal/sensitive information (name, email, credit card, address, payment information, resume, etc.) to complete a transaction (purchase, reservation, sign-up, etc.), or to communicate as a human would (call, email, apply to a job, etc.).
+
+**Guideline:** Solve the task as far as possible **up until a Critical Point**."""
+
+
+def get_fara_system_prompt() -> str:
+    """
+    Get system prompt with override support.
+
+    Priority:
+    1. FARA_SYSTEM_PROMPT_FILE - path to file containing prompt
+    2. FARA_SYSTEM_PROMPT - inline prompt string
+    3. DEFAULT_FARA_SYSTEM_PROMPT - built-in default
+    """
+    # Check for file override first
+    prompt_file = os.environ.get("FARA_SYSTEM_PROMPT_FILE")
+    if prompt_file and os.path.exists(prompt_file):
+        try:
+            with open(prompt_file, "r") as f:
+                return f.read().strip()
+        except Exception as e:
+            logger.warning(f"Failed to read FARA_SYSTEM_PROMPT_FILE: {e}")
+
+    # Check for inline override
+    inline_prompt = os.environ.get("FARA_SYSTEM_PROMPT")
+    if inline_prompt:
+        return inline_prompt
+
+    return DEFAULT_FARA_SYSTEM_PROMPT
 
 # Default native resolutions for vision models
 DEFAULT_NATIVE_RESOLUTIONS = {
@@ -266,6 +309,142 @@ IMPORTANT: Return ONLY the tool_call tags with JSON, no other text."""
             f"(below threshold {min_confidence})"
         )
         return best_result
+
+    async def get_action_with_context(
+        self,
+        goal: str,
+        screenshot_b64: str,
+        history: Optional[list] = None,
+    ) -> FaraToolCall:
+        """
+        Get action with multi-screenshot context for better multi-step reasoning.
+
+        Per Fara-7B docs: Uses "latest screenshots" and "full history of
+        previous thoughts and actions" for optimal performance.
+
+        Sends up to 3 screenshots (configurable via FARA_CONTEXT_SCREENSHOTS):
+        - Previous step screenshots showing what changed
+        - Current screenshot
+
+        Args:
+            goal: Natural language goal
+            screenshot_b64: Current screenshot (base64)
+            history: List of StepContext from previous steps
+
+        Returns:
+            FaraToolCall with action type, coordinates, and other details
+        """
+        history = history or []
+        max_screenshots = int(os.environ.get("FARA_CONTEXT_SCREENSHOTS", "3"))
+
+        # Get original dimensions for scaling
+        original_size = self._get_image_dimensions(screenshot_b64)
+        native_size = self._select_best_resolution(*original_size)
+
+        # Build history text with previous actions and reasoning
+        history_text = ""
+        if history:
+            history_lines = []
+            for i, step in enumerate(history, 1):
+                status = "✓" if step.success else "✗"
+                line = f"[{i}] {step.action} {status}"
+                if step.reasoning:
+                    # Include first 100 chars of reasoning
+                    line += f" - {step.reasoning[:100]}"
+                history_lines.append(line)
+            history_text = "\n\nPrevious actions:\n" + "\n".join(history_lines)
+
+        # Build prompt with action instructions
+        prompt = f"""Goal: {goal}{history_text}
+
+Based on the screenshot(s), determine the next action to achieve this goal.
+
+Return a tool_call in this format:
+<tool_call>
+{{"name": "computer_use", "arguments": {{"action": "<action>", ...parameters...}}}}
+</tool_call>
+
+Available actions:
+- left_click: Click at coordinates. Parameters: "coordinate": [x, y]
+- double_click: Double-click at coordinates. Parameters: "coordinate": [x, y]
+- type: Type text. Parameters: "coordinate": [x, y], "text": "text to type"
+- scroll: Scroll page. Parameters: "direction": "up" or "down", "pixels": amount
+- key: Press keys. Parameters: "keys": ["Enter"] or ["Control", "c"]
+- visit_url: Navigate to URL. Parameters: "url": "https://..."
+- terminate: Goal completed, no more actions needed.
+- wait: Wait for page to load.
+
+Include a brief "reasoning" field explaining your decision.
+
+IMPORTANT:
+- If you see a dropdown menu is open, click on an item INSIDE the menu, not the menu trigger again.
+- If previous actions show you clicked something that opened a menu, look for submenu items to click.
+- Return ONLY the tool_call tags with JSON, no other text."""
+
+        # Build content array with multiple screenshots
+        content = [{"type": "text", "text": prompt}]
+
+        # Add historical screenshots (oldest first, up to max_screenshots - 1)
+        screenshots_to_include = history[-(max_screenshots - 1):] if history else []
+        for step in screenshots_to_include:
+            if step.screenshot_b64:
+                scaled = self._scale_to_native(step.screenshot_b64, native_size)
+                if not scaled.startswith("data:"):
+                    scaled = f"data:image/png;base64,{scaled}"
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": scaled},
+                })
+
+        # Add current screenshot (most recent, always included)
+        scaled_current = self._scale_to_native(screenshot_b64, native_size)
+        if not scaled_current.startswith("data:"):
+            scaled_current = f"data:image/png;base64,{scaled_current}"
+        content.append({
+            "type": "image_url",
+            "image_url": {"url": scaled_current},
+        })
+
+        # Build messages with system prompt (supports override via env var)
+        messages = [
+            {"role": "system", "content": get_fara_system_prompt()},
+            {"role": "user", "content": content},
+        ]
+
+        logger.debug(
+            f"get_action_with_context: {len(screenshots_to_include) + 1} screenshots, "
+            f"{len(history)} history steps"
+        )
+
+        try:
+            client = self._get_client()
+            response = await client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                max_tokens=500,
+            )
+            raw_response = response.choices[0].message.content
+            tool_call = self._parse_to_fara_tool_call(raw_response)
+
+            # Scale coordinates back to original resolution
+            if tool_call.coordinate:
+                scaled_x, scaled_y = self._scale_coordinates(
+                    tool_call.coordinate[0],
+                    tool_call.coordinate[1],
+                    original_size,
+                    native_size,
+                )
+                tool_call.coordinate = (scaled_x, scaled_y)
+
+            return tool_call
+
+        except Exception as e:
+            logger.error(f"get_action_with_context failed: {e}")
+            return FaraToolCall(
+                action="terminate",
+                confidence=0.0,
+                reasoning=f"Error getting action: {e}",
+            )
 
     def _parse_to_fara_tool_call(self, text: str) -> FaraToolCall:
         """
@@ -664,7 +843,7 @@ IMPORTANT: Return ONLY the tool_call tags with JSON, no other text."""
             return self.native_resolutions.get("square", (1024, 1024))
 
     def _scale_to_native(self, b64_image: str, native_res: Tuple[int, int]) -> str:
-        """Scale image to native resolution."""
+        """Scale image proportionally to fit within native resolution bounds."""
         prefix = ""
         if "," in b64_image:
             prefix, b64_image = b64_image.split(",", 1)
@@ -672,7 +851,15 @@ IMPORTANT: Return ONLY the tool_call tags with JSON, no other text."""
 
         img_bytes = base64.b64decode(b64_image)
         img = Image.open(io.BytesIO(img_bytes))
-        scaled = img.resize(native_res, Image.Resampling.LANCZOS)
+
+        # Scale uniformly to fit within bounds (no anamorphic distortion)
+        scale_x = native_res[0] / img.width
+        scale_y = native_res[1] / img.height
+        scale = min(scale_x, scale_y)  # Use limiting dimension
+
+        new_width = int(img.width * scale)
+        new_height = int(img.height * scale)
+        scaled = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
 
         buffer = io.BytesIO()
         scaled.save(buffer, format="PNG")
@@ -687,7 +874,11 @@ IMPORTANT: Return ONLY the tool_call tags with JSON, no other text."""
         original_size: Tuple[int, int],
         native_size: Tuple[int, int],
     ) -> Tuple[int, int]:
-        """Scale coordinates from native to original resolution."""
-        scale_x = original_size[0] / native_size[0]
-        scale_y = original_size[1] / native_size[1]
-        return int(x * scale_x), int(y * scale_y)
+        """Scale coordinates from native back to original resolution (uniform)."""
+        # Use same uniform scale factor as _scale_to_native
+        scale_x = native_size[0] / original_size[0]
+        scale_y = native_size[1] / original_size[1]
+        scale = min(scale_x, scale_y)  # Same factor used when scaling image
+
+        # Inverse: divide by scale to get back to original
+        return int(x / scale), int(y / scale)

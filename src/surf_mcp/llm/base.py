@@ -114,6 +114,28 @@ class ExecutionResult:
     """New Playwright Page if click opened a new tab (for auto-switch)."""
 
 
+@dataclass
+class StepContext:
+    """
+    Context from a previous step for multi-turn conversations.
+
+    Per Fara-7B docs: The model expects "latest screenshots" and
+    "full history of previous thoughts and actions" for optimal performance.
+    """
+
+    screenshot_b64: str
+    """Screenshot taken BEFORE this step's action was executed."""
+
+    action: str
+    """The action that was taken (e.g., 'left_click at (642, 97)')."""
+
+    reasoning: str = ""
+    """Fara's reasoning/thinking for this step."""
+
+    success: bool = True
+    """Whether the action succeeded."""
+
+
 class VisualGrounder(ABC):
     """
     Abstract base for visual grounding implementations.
@@ -168,3 +190,29 @@ class VisualGrounder(ABC):
             FaraToolCall with action type, coordinates, and other details
         """
         pass
+
+    async def get_action_with_context(
+        self,
+        goal: str,
+        screenshot_b64: str,
+        history: Optional[List["StepContext"]] = None,
+    ) -> FaraToolCall:
+        """
+        Get action with full conversation context (multi-screenshot).
+
+        Per Fara-7B docs: Uses "latest screenshots" and "full history of
+        previous thoughts and actions" for better multi-step reasoning.
+
+        Default implementation falls back to get_action (single screenshot).
+        Subclasses can override for multi-turn support.
+
+        Args:
+            goal: Natural language goal
+            screenshot_b64: Current screenshot (base64)
+            history: Previous steps with screenshots and reasoning
+
+        Returns:
+            FaraToolCall with action type, coordinates, and other details
+        """
+        # Default: ignore history, use single-screenshot method
+        return await self.get_action(goal, screenshot_b64)

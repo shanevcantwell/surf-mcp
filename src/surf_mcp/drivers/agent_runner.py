@@ -15,7 +15,7 @@ import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional
 
-from ..llm.base import ExecutionResult, FaraToolCall
+from ..llm.base import ExecutionResult, FaraToolCall, StepContext
 
 if TYPE_CHECKING:
     from playwright.async_api import Page
@@ -148,6 +148,26 @@ Previous actions:
 
 Based on the current screenshot and previous actions, what is the next action?"""
 
+    def _build_step_contexts(self, steps: List[AgentStep]) -> List[StepContext]:
+        """
+        Convert AgentStep list to StepContext list for multi-screenshot context.
+
+        Creates StepContext objects with screenshots and formatted action descriptions
+        that can be passed to get_action_with_context for multi-image reasoning.
+        """
+        contexts = []
+        for step in steps:
+            # Format action description
+            action_desc = self._format_step(step)
+
+            contexts.append(StepContext(
+                screenshot_b64=step.screenshot_b64 or "",
+                action=action_desc,
+                reasoning=step.tool_call.reasoning,
+                success=step.execution_result.success,
+            ))
+        return contexts
+
     def cancel(self, reason: str = "") -> None:
         """
         Cancel the agent loop.
@@ -229,13 +249,20 @@ Based on the current screenshot and previous actions, what is the next action?""
                 )
 
             try:
-                # Build goal with ReAct history context
-                augmented_goal = self._build_goal_with_history(goal, steps)
+                # Build StepContext history for multi-screenshot support
+                step_contexts = self._build_step_contexts(steps)
 
-                # Use get_action_with_retry if available, otherwise get_action
-                if hasattr(self.grounder, "get_action_with_retry"):
+                # Use get_action_with_context if available (multi-screenshot)
+                if hasattr(self.grounder, "get_action_with_context"):
+                    tool_call = await self.grounder.get_action_with_context(
+                        goal, screenshot_b64, history=step_contexts
+                    )
+                # Fallback: Use text-only history with single screenshot
+                elif hasattr(self.grounder, "get_action_with_retry"):
+                    augmented_goal = self._build_goal_with_history(goal, steps)
                     tool_call = await self.grounder.get_action_with_retry(augmented_goal, screenshot_b64)
                 else:
+                    augmented_goal = self._build_goal_with_history(goal, steps)
                     tool_call = await self.grounder.get_action(augmented_goal, screenshot_b64)
             except Exception as e:
                 logger.error(f"Fara failed at step {step_num}: {e}")
