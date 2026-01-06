@@ -72,6 +72,11 @@ class AgentRunner:
     Each step is streamed via MCP progress notifications if a progress token
     is provided.
 
+    ReAct Pattern:
+        Implements ReAct (Reasoning + Acting) by including action history in the
+        prompt. This gives Fara memory of previous steps so it can reason about
+        what's already done and what remains.
+
     Environment variables:
         FARA_MAX_AGENT_STEPS: Maximum steps before giving up (default: 20)
     """
@@ -98,6 +103,50 @@ class AgentRunner:
 
         self._cancelled = False
         self._cancel_reason: Optional[str] = None
+
+    def _format_step(self, step: AgentStep) -> str:
+        """Format a single step for history context."""
+        tc = step.tool_call
+        status = "✓" if step.execution_result.success else "✗"
+
+        # Build action description
+        if tc.action == "visit_url":
+            desc = f"visit_url: {tc.url}"
+        elif tc.action == "type":
+            coord_str = f" at {tc.coordinate}" if tc.coordinate else ""
+            desc = f"type: '{tc.text}'{coord_str}"
+        elif tc.action in ("left_click", "click", "double_click"):
+            coord_str = f" at {tc.coordinate}" if tc.coordinate else ""
+            desc = f"{tc.action}{coord_str}"
+        elif tc.action == "scroll":
+            dir_str = tc.direction or ("down" if tc.pixels and tc.pixels < 0 else "up")
+            desc = f"scroll {dir_str}"
+        elif tc.action == "key":
+            desc = f"key: {tc.keys}"
+        else:
+            desc = tc.action
+
+        return f"[{step.step_number}] {desc} {status}"
+
+    def _build_goal_with_history(self, goal: str, steps: List[AgentStep]) -> str:
+        """
+        Build goal prompt with ReAct-style action history.
+
+        This gives Fara context about what actions were already taken,
+        enabling it to reason about what remains to be done.
+        """
+        if not steps:
+            return goal
+
+        history_lines = [self._format_step(s) for s in steps]
+        history_str = "\n".join(history_lines)
+
+        return f"""{goal}
+
+Previous actions:
+{history_str}
+
+Based on the current screenshot and previous actions, what is the next action?"""
 
     def cancel(self, reason: str = "") -> None:
         """
@@ -180,11 +229,14 @@ class AgentRunner:
                 )
 
             try:
+                # Build goal with ReAct history context
+                augmented_goal = self._build_goal_with_history(goal, steps)
+
                 # Use get_action_with_retry if available, otherwise get_action
                 if hasattr(self.grounder, "get_action_with_retry"):
-                    tool_call = await self.grounder.get_action_with_retry(goal, screenshot_b64)
+                    tool_call = await self.grounder.get_action_with_retry(augmented_goal, screenshot_b64)
                 else:
-                    tool_call = await self.grounder.get_action(goal, screenshot_b64)
+                    tool_call = await self.grounder.get_action(augmented_goal, screenshot_b64)
             except Exception as e:
                 logger.error(f"Fara failed at step {step_num}: {e}")
                 return AgentResult(

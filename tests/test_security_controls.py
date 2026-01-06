@@ -506,3 +506,346 @@ class TestSecurityIntegration:
 
         # Last one should have outcome indicating rate limited
         assert click_events[-1].outcome == "rate_limited"
+
+
+# ============================================================================
+# PlaywrightExecutor Scroll Tests
+# ============================================================================
+
+
+class TestPlaywrightExecutorScroll:
+    """Tests for scroll sign convention handling in PlaywrightExecutor.
+
+    Fara convention: negative pixels = scroll down, positive = scroll up
+    Playwright convention: positive delta = scroll down, negative = scroll up
+    Classic Microsoft...
+    """
+
+    @pytest.mark.asyncio
+    async def test_fara_negative_pixels_scrolls_down(self):
+        """Fara's negative pixels should result in positive wheel delta (scroll down)."""
+        from surf_mcp.drivers.playwright_executor import PlaywrightExecutor
+        from surf_mcp.llm.base import FaraToolCall
+
+        executor = PlaywrightExecutor()
+
+        # Mock page with spied wheel method
+        mock_page = AsyncMock()
+        mock_page.mouse = AsyncMock()
+        mock_page.mouse.wheel = AsyncMock()
+
+        # Fara returns negative pixels to mean "scroll down"
+        tool_call = FaraToolCall(
+            action="scroll",
+            pixels=-480,  # Fara: negative = down
+            direction=None,  # No explicit direction
+        )
+
+        await executor.execute(tool_call, mock_page)
+
+        # Should call wheel with POSITIVE delta (Playwright: positive = down)
+        mock_page.mouse.wheel.assert_called_once_with(0, 480)
+
+    @pytest.mark.asyncio
+    async def test_fara_positive_pixels_scrolls_up(self):
+        """Fara's positive pixels should result in negative wheel delta (scroll up)."""
+        from surf_mcp.drivers.playwright_executor import PlaywrightExecutor
+        from surf_mcp.llm.base import FaraToolCall
+
+        executor = PlaywrightExecutor()
+
+        mock_page = AsyncMock()
+        mock_page.mouse = AsyncMock()
+        mock_page.mouse.wheel = AsyncMock()
+
+        # Fara returns positive pixels to mean "scroll up"
+        tool_call = FaraToolCall(
+            action="scroll",
+            pixels=300,  # Fara: positive = up
+            direction=None,
+        )
+
+        await executor.execute(tool_call, mock_page)
+
+        # Should call wheel with NEGATIVE delta (Playwright: negative = up)
+        mock_page.mouse.wheel.assert_called_once_with(0, -300)
+
+    @pytest.mark.asyncio
+    async def test_explicit_direction_down(self):
+        """Explicit direction='down' with unsigned pixels works correctly."""
+        from surf_mcp.drivers.playwright_executor import PlaywrightExecutor
+        from surf_mcp.llm.base import FaraToolCall
+
+        executor = PlaywrightExecutor()
+
+        mock_page = AsyncMock()
+        mock_page.mouse = AsyncMock()
+        mock_page.mouse.wheel = AsyncMock()
+
+        tool_call = FaraToolCall(
+            action="scroll",
+            pixels=500,
+            direction="down",
+        )
+
+        await executor.execute(tool_call, mock_page)
+
+        mock_page.mouse.wheel.assert_called_once_with(0, 500)
+
+    @pytest.mark.asyncio
+    async def test_explicit_direction_up(self):
+        """Explicit direction='up' with unsigned pixels works correctly."""
+        from surf_mcp.drivers.playwright_executor import PlaywrightExecutor
+        from surf_mcp.llm.base import FaraToolCall
+
+        executor = PlaywrightExecutor()
+
+        mock_page = AsyncMock()
+        mock_page.mouse = AsyncMock()
+        mock_page.mouse.wheel = AsyncMock()
+
+        tool_call = FaraToolCall(
+            action="scroll",
+            pixels=500,
+            direction="up",
+        )
+
+        await executor.execute(tool_call, mock_page)
+
+        mock_page.mouse.wheel.assert_called_once_with(0, -500)
+
+
+class TestPlaywrightExecutorType:
+    """Tests for type action handling in PlaywrightExecutor.
+
+    Fara sends delete_existing_text and press_enter params that must be handled.
+    """
+
+    @pytest.mark.asyncio
+    async def test_type_with_delete_existing_text(self):
+        """Type action with delete_existing_text clears field first."""
+        from surf_mcp.drivers.playwright_executor import PlaywrightExecutor
+        from surf_mcp.llm.base import FaraToolCall
+
+        executor = PlaywrightExecutor()
+
+        mock_page = AsyncMock()
+        mock_page.mouse = AsyncMock()
+        mock_page.mouse.click = AsyncMock()
+        mock_page.keyboard = AsyncMock()
+        mock_page.keyboard.press = AsyncMock()
+        mock_page.keyboard.type = AsyncMock()
+
+        tool_call = FaraToolCall(
+            action="type",
+            coordinate=(720, 333),
+            text="hello world",
+            delete_existing_text=True,
+            press_enter=False,
+        )
+
+        result = await executor.execute(tool_call, mock_page)
+
+        assert result.success is True
+        # Should click at coordinates
+        mock_page.mouse.click.assert_called_once_with(720, 333)
+        # Should clear field (Ctrl+A, Delete) then type
+        press_calls = mock_page.keyboard.press.call_args_list
+        assert len(press_calls) == 2
+        assert press_calls[0][0][0] == "Control+a"
+        assert press_calls[1][0][0] == "Delete"
+        mock_page.keyboard.type.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_type_with_press_enter(self):
+        """Type action with press_enter presses Enter after typing."""
+        from surf_mcp.drivers.playwright_executor import PlaywrightExecutor
+        from surf_mcp.llm.base import FaraToolCall
+
+        executor = PlaywrightExecutor()
+
+        mock_page = AsyncMock()
+        mock_page.mouse = AsyncMock()
+        mock_page.mouse.click = AsyncMock()
+        mock_page.keyboard = AsyncMock()
+        mock_page.keyboard.press = AsyncMock()
+        mock_page.keyboard.type = AsyncMock()
+
+        tool_call = FaraToolCall(
+            action="type",
+            coordinate=(100, 200),
+            text="search query",
+            delete_existing_text=False,
+            press_enter=True,
+        )
+
+        result = await executor.execute(tool_call, mock_page)
+
+        assert result.success is True
+        mock_page.keyboard.type.assert_called_once()
+        # Should press Enter after typing
+        mock_page.keyboard.press.assert_called_once_with("Enter")
+
+    @pytest.mark.asyncio
+    async def test_type_with_both_params(self):
+        """Type action with both delete_existing_text and press_enter."""
+        from surf_mcp.drivers.playwright_executor import PlaywrightExecutor
+        from surf_mcp.llm.base import FaraToolCall
+
+        executor = PlaywrightExecutor()
+
+        mock_page = AsyncMock()
+        mock_page.mouse = AsyncMock()
+        mock_page.mouse.click = AsyncMock()
+        mock_page.keyboard = AsyncMock()
+        mock_page.keyboard.press = AsyncMock()
+        mock_page.keyboard.type = AsyncMock()
+
+        tool_call = FaraToolCall(
+            action="type",
+            coordinate=(720, 333),
+            text="olde boston bulldogges",
+            delete_existing_text=True,
+            press_enter=True,
+        )
+
+        result = await executor.execute(tool_call, mock_page)
+
+        assert result.success is True
+        # Should: click, Ctrl+A, Delete, type, Enter
+        press_calls = mock_page.keyboard.press.call_args_list
+        assert len(press_calls) == 3
+        assert press_calls[0][0][0] == "Control+a"
+        assert press_calls[1][0][0] == "Delete"
+        assert press_calls[2][0][0] == "Enter"
+
+    @pytest.mark.asyncio
+    async def test_type_basic(self):
+        """Basic type action without special params."""
+        from surf_mcp.drivers.playwright_executor import PlaywrightExecutor
+        from surf_mcp.llm.base import FaraToolCall
+
+        executor = PlaywrightExecutor()
+
+        mock_page = AsyncMock()
+        mock_page.mouse = AsyncMock()
+        mock_page.mouse.click = AsyncMock()
+        mock_page.keyboard = AsyncMock()
+        mock_page.keyboard.press = AsyncMock()
+        mock_page.keyboard.type = AsyncMock()
+
+        tool_call = FaraToolCall(
+            action="type",
+            coordinate=(500, 400),
+            text="just text",
+            # Defaults: delete_existing_text=False, press_enter=False
+        )
+
+        result = await executor.execute(tool_call, mock_page)
+
+        assert result.success is True
+        mock_page.mouse.click.assert_called_once_with(500, 400)
+        mock_page.keyboard.type.assert_called_once()
+        # No press calls (no delete, no enter)
+        mock_page.keyboard.press.assert_not_called()
+
+
+class TestAgentRunnerReAct:
+    """Tests for AgentRunner ReAct history context."""
+
+    def test_format_step_visit_url(self):
+        """Format visit_url action for history."""
+        from surf_mcp.drivers.agent_runner import AgentRunner, AgentStep
+        from surf_mcp.llm.base import FaraToolCall, ExecutionResult
+
+        runner = AgentRunner(grounder=MagicMock(), executor=MagicMock())
+
+        step = AgentStep(
+            step_number=1,
+            tool_call=FaraToolCall(action="visit_url", url="https://google.com"),
+            execution_result=ExecutionResult(success=True, action="visit_url"),
+        )
+
+        result = runner._format_step(step)
+        assert "[1]" in result
+        assert "visit_url" in result
+        assert "google.com" in result
+        assert "✓" in result
+
+    def test_format_step_type(self):
+        """Format type action for history."""
+        from surf_mcp.drivers.agent_runner import AgentRunner, AgentStep
+        from surf_mcp.llm.base import FaraToolCall, ExecutionResult
+
+        runner = AgentRunner(grounder=MagicMock(), executor=MagicMock())
+
+        step = AgentStep(
+            step_number=2,
+            tool_call=FaraToolCall(
+                action="type",
+                text="hello world",
+                coordinate=(100, 200),
+            ),
+            execution_result=ExecutionResult(success=True, action="type"),
+        )
+
+        result = runner._format_step(step)
+        assert "[2]" in result
+        assert "type" in result
+        assert "hello world" in result
+        assert "(100, 200)" in result
+
+    def test_format_step_failed(self):
+        """Format failed action shows ✗."""
+        from surf_mcp.drivers.agent_runner import AgentRunner, AgentStep
+        from surf_mcp.llm.base import FaraToolCall, ExecutionResult
+
+        runner = AgentRunner(grounder=MagicMock(), executor=MagicMock())
+
+        step = AgentStep(
+            step_number=1,
+            tool_call=FaraToolCall(action="left_click", coordinate=(50, 50)),
+            execution_result=ExecutionResult(success=False, action="left_click", error="timeout"),
+        )
+
+        result = runner._format_step(step)
+        assert "✗" in result
+
+    def test_build_goal_with_history_empty(self):
+        """No history returns original goal."""
+        from surf_mcp.drivers.agent_runner import AgentRunner
+
+        runner = AgentRunner(grounder=MagicMock(), executor=MagicMock())
+
+        result = runner._build_goal_with_history("click the button", [])
+        assert result == "click the button"
+
+    def test_build_goal_with_history(self):
+        """History is appended to goal."""
+        from surf_mcp.drivers.agent_runner import AgentRunner, AgentStep
+        from surf_mcp.llm.base import FaraToolCall, ExecutionResult
+
+        runner = AgentRunner(grounder=MagicMock(), executor=MagicMock())
+
+        steps = [
+            AgentStep(
+                step_number=1,
+                tool_call=FaraToolCall(action="visit_url", url="https://google.com"),
+                execution_result=ExecutionResult(success=True, action="visit_url"),
+            ),
+            AgentStep(
+                step_number=2,
+                tool_call=FaraToolCall(action="type", text="search", coordinate=(100, 200)),
+                execution_result=ExecutionResult(success=True, action="type"),
+            ),
+        ]
+
+        result = runner._build_goal_with_history("search for cats", steps)
+
+        assert "search for cats" in result
+        assert "Previous actions:" in result
+        assert "[1]" in result
+        assert "[2]" in result
+        assert "visit_url" in result
+        assert "type" in result
+        assert "next action" in result.lower()

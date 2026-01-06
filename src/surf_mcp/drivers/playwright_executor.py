@@ -166,13 +166,25 @@ class PlaywrightExecutor:
                         await page.mouse.click(
                             tool_call.coordinate[0], tool_call.coordinate[1]
                         )
+                    # Clear existing text if requested (Fara often sends this for form fields)
+                    if tool_call.delete_existing_text:
+                        await page.keyboard.press("Control+a")
+                        await page.keyboard.press("Delete")
                     await page.keyboard.type(tool_call.text, delay=self.type_delay_ms)
+                    # Press Enter after typing if requested
+                    if tool_call.press_enter:
+                        await page.keyboard.press("Enter")
 
                 case "scroll":
-                    pixels = tool_call.pixels or self.default_scroll_pixels
-                    # Default to down if direction not specified
-                    direction = (tool_call.direction or "down").lower()
-                    delta = pixels if direction == "down" else -pixels
+                    if tool_call.pixels is not None and tool_call.direction is None:
+                        # Fara convention: negative = down, positive = up
+                        # Playwright convention: positive = down, negative = up
+                        # Classic Microsoft...
+                        delta = -tool_call.pixels
+                    else:
+                        pixels = abs(tool_call.pixels) if tool_call.pixels else self.default_scroll_pixels
+                        direction = (tool_call.direction or "down").lower()
+                        delta = pixels if direction == "down" else -pixels
                     await page.mouse.wheel(0, delta)
 
                 case "key":
@@ -193,12 +205,10 @@ class PlaywrightExecutor:
                             error="visit_url action requires url",
                         )
                     # Security: Check domain filter before navigation
-                    if self._domain_filter and not self._domain_filter.is_allowed(
-                        tool_call.url
-                    ):
-                        raise BlockedDomainError(
-                            f"Domain blocked by security policy: {tool_call.url}"
-                        )
+                    if self._domain_filter:
+                        allowed, reason = self._domain_filter.check(tool_call.url)
+                        if not allowed:
+                            raise BlockedDomainError(reason)
                     await page.goto(tool_call.url, wait_until="networkidle")
 
                 case "terminate":

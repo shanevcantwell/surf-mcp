@@ -14,7 +14,7 @@ import logging
 import os
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from .drivers.base import NavigatorDriver
@@ -24,16 +24,16 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Session:
-    """A navigator session containing one or more drivers."""
+    """A browser session containing one or more drivers."""
 
     session_id: str
     drivers: Dict[str, NavigatorDriver] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    last_activity: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_activity: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def touch(self) -> None:
         """Update last activity timestamp."""
-        self.last_activity = datetime.utcnow()
+        self.last_activity = datetime.now(timezone.utc)
 
     def get_driver(self, alias: str) -> Optional[NavigatorDriver]:
         """Get driver by alias."""
@@ -83,7 +83,7 @@ class Session:
 
 class SessionManager:
     """
-    Manages multiple navigator sessions with configurable limits.
+    Manages browser sessions with configurable limits.
 
     Thread-safe session pool with:
     - Max session enforcement

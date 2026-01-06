@@ -1,6 +1,6 @@
 # Surf MCP Architecture
 
-**Version:** 0.4.0
+**Version:** 0.5.0
 **Last Updated:** 2025-12-20
 
 ---
@@ -97,6 +97,8 @@ class FaraToolCall:
     pixels: Optional[int]     # Scroll amount
     url: Optional[str]        # URL for visit_url
     keys: Optional[List[str]] # Keys for key action
+    delete_existing_text: bool = False  # Clear field before typing
+    press_enter: bool = False  # Press Enter after typing
     confidence: float = 1.0   # 0.0-1.0
     reasoning: str = ""       # Chain-of-thought explanation
 ```
@@ -474,7 +476,7 @@ See [tools/fara-harness/CHEATSHEET.md](../tools/fara-harness/CHEATSHEET.md) for 
 ```
 surf-mcp/
 ├── src/surf_mcp/
-│   ├── __init__.py              # Package exports (version 0.4.0)
+│   ├── __init__.py              # Package exports
 │   ├── server.py                # MCP server entrypoint
 │   ├── session_manager.py       # Session lifecycle
 │   ├── drivers/

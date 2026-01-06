@@ -578,13 +578,15 @@ class BrowserDriver(NavigatorDriver):
             "step_count": result.step_count,
             "steps": [
                 {
-                    "step": s.step_number,
+                    "step_number": s.step_number,
                     "action": s.tool_call.action,
                     "coordinate": s.tool_call.coordinate,
+                    "text": s.tool_call.text,
                     "confidence": s.tool_call.confidence,
                     "reasoning": s.tool_call.reasoning,
-                    "execution_success": s.execution_result.success,
-                    "execution_error": s.execution_result.error,
+                    "success": s.execution_result.success,
+                    "error": s.execution_result.error,
+                    "screenshot": s.screenshot_b64,
                 }
                 for s in result.steps
             ],

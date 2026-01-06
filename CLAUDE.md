@@ -2,7 +2,7 @@
 
 **Purpose:** MCP server for visual browser automation via Fara.
 
-**Version:** 0.4.0
+**Version:** 0.5.0
 
 ---
 
@@ -35,7 +35,11 @@ The `FaraToolCall` dataclass preserves Fara's full action context:
 - `coordinate`: (x, y) pixel coordinates
 - `text`: Text to type (for type action)
 - `direction`: Scroll direction (up/down)
+- `pixels`: Scroll amount in pixels
+- `url`: URL to navigate to (for visit_url action)
 - `keys`: Keys to press (for key action)
+- `delete_existing_text`: Clear field before typing (Ctrl+A, Delete)
+- `press_enter`: Press Enter after typing
 - `confidence`: Model confidence (0.0-1.0)
 - `reasoning`: Fara's chain-of-thought explanation
 

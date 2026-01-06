@@ -1,10 +1,10 @@
 """
 Content MCP commands.
 
-Universal content operations that work with any driver:
-- list: List contents at current location
-- read: Read content
-- snapshot: Capture current state
+Content operations for browser automation:
+- list: List links on current page
+- read: Read page content
+- snapshot: Capture screenshot
 """
 
 from typing import Any, Dict, List
@@ -19,7 +19,7 @@ def get_tools() -> List[Tool]:
     return [
         Tool(
             name="list",
-            description="List contents at current location (directory entries for filesystem, links for browser)",
+            description="List links on current page",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -37,7 +37,7 @@ def get_tools() -> List[Tool]:
         ),
         Tool(
             name="read",
-            description="Read content (file for filesystem, page text for browser)",
+            description="Read page text content",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -51,7 +51,7 @@ def get_tools() -> List[Tool]:
                     },
                     "target": {
                         "type": "string",
-                        "description": "Target to read (filename for filesystem, CSS selector for browser)",
+                        "description": "Optional CSS selector to read specific element",
                     },
                 },
                 "required": ["session_id", "driver"],
@@ -59,7 +59,7 @@ def get_tools() -> List[Tool]:
         ),
         Tool(
             name="snapshot",
-            description="Capture current state (JSON for filesystem, PNG screenshot for browser)",
+            description="Capture screenshot as base64 PNG",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -127,10 +127,7 @@ async def snapshot(manager: SessionManager, args: Dict[str, Any]) -> Dict[str, A
 
     snapshot_data = await driver.snapshot()
 
-    # Determine format based on driver type
-    format_type = "application/json" if driver.driver_type == "filesystem" else "image/png"
-
     return {
         "snapshot": snapshot_data,
-        "format": format_type,
+        "format": "image/png",
     }

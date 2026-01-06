@@ -65,7 +65,7 @@ async def list_tools() -> List[Tool]:
     # Session lifecycle tools
     tools.extend(session.get_tools())
 
-    # Universal navigation tools
+    # Browser navigation tools
     tools.extend(navigation.get_tools())
 
     # Content tools (read, list, snapshot)
@@ -95,7 +95,7 @@ async def call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
         elif name == "session_list":
             result = await session.list_sessions(session_manager)
 
-        # Universal navigation
+        # Browser navigation
         elif name == "goto":
             result = await navigation.goto(session_manager, arguments)
         elif name == "current":

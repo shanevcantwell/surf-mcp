@@ -122,11 +122,6 @@ class DomainFilter:
 
         return False
 
-    def is_blocked(self, url: str) -> bool:
-        """Check if URL is blocked."""
-        allowed, _ = self.check(url)
-        return not allowed
-
     def __repr__(self) -> str:
         return (
             f"DomainFilter("

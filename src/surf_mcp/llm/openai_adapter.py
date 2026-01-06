@@ -333,6 +333,9 @@ IMPORTANT: Return ONLY the tool_call tags with JSON, no other text."""
             url = args.get("url")
             keys = args.get("keys")
             reasoning = args.get("reasoning", "")
+            # Fara type action params
+            delete_existing_text = args.get("delete_existing_text", False)
+            press_enter = args.get("press_enter", False)
 
             # Convert coordinate list to tuple
             coord_tuple = None
@@ -347,6 +350,8 @@ IMPORTANT: Return ONLY the tool_call tags with JSON, no other text."""
                 pixels=pixels,
                 url=url,
                 keys=keys,
+                delete_existing_text=delete_existing_text,
+                press_enter=press_enter,
                 confidence=1.0,  # Fara doesn't provide confidence, assume high
                 reasoning=reasoning,
             )
@@ -591,7 +596,8 @@ IMPORTANT: Return ONLY the tool_call tags with JSON, no other text."""
                     reasoning=f"Action '{action}' missing coordinates",
                 )
 
-        # Legacy serpico format
+        # Fara serpico format: x field contains [x, y] coordinates (confusing but real)
+        # {"name": "serpico", "arguments": {"found": true, "x": [x_coord, y_coord]}}
         elif name == "serpico":
             x_coord = args.get("x", [])
             if args.get("found") and x_coord and len(x_coord) >= 2:
@@ -601,6 +607,38 @@ IMPORTANT: Return ONLY the tool_call tags with JSON, no other text."""
                     y=x_coord[1],
                     confidence=1.0,
                 )
+
+        # json_output format with bounding boxes
+        # {"name": "json_output", "value": {"found": true, "x": [x1, x2], "y": [y1, y2], ...}}
+        elif name == "json_output":
+            value = tool_json.get("value", {})
+            if value.get("found"):
+                x_box = value.get("x", [])
+                y_box = value.get("y", [])
+                # x and y are bounding box edges, compute center
+                if x_box and y_box and len(x_box) >= 2 and len(y_box) >= 2:
+                    center_x = int((x_box[0] + x_box[1]) / 2)
+                    center_y = int((y_box[0] + y_box[1]) / 2)
+                    return LocateResult(
+                        found=True,
+                        x=center_x,
+                        y=center_y,
+                        confidence=value.get("confidence", 1.0),
+                        reasoning=value.get("reasoning", ""),
+                    )
+                # Maybe x/y are single values
+                elif isinstance(value.get("x"), (int, float)) and isinstance(value.get("y"), (int, float)):
+                    return LocateResult(
+                        found=True,
+                        x=int(value["x"]),
+                        y=int(value["y"]),
+                        confidence=value.get("confidence", 1.0),
+                        reasoning=value.get("reasoning", ""),
+                    )
+            return LocateResult(
+                found=False,
+                reasoning=value.get("reasoning", "Element not found"),
+            )
 
         logger.warning(f"Unknown tool_call format: {tool_json}")
         return LocateResult(found=False, reasoning=f"Unknown tool_call format: {name}")

@@ -214,7 +214,7 @@ class TestMCPServerIntegration:
         """Test basic connect/disconnect cycle."""
         client = SurfMCPClient()
 
-        await client.connect(use_docker=False)
+        await client.connect()
         assert client._connected is True
 
         await client.disconnect()
@@ -224,7 +224,7 @@ class TestMCPServerIntegration:
     async def test_session_list_empty(self, check_server_available):
         """Test session_list on fresh server."""
         client = SurfMCPClient()
-        await client.connect(use_docker=False)
+        await client.connect()
 
         try:
             result = await client.session_list()
@@ -262,7 +262,7 @@ class TestBrowserIntegration:
     ):
         """Test browser session with storage_state round-trip."""
         client = SurfMCPClient()
-        await client.connect(use_docker=False)
+        await client.connect()
 
         try:
             # Create browser session with empty storage_state
@@ -300,7 +300,7 @@ class TestBrowserIntegration:
     async def test_browser_snapshot(self, check_playwright_available):
         """Test taking browser screenshot."""
         client = SurfMCPClient()
-        await client.connect(use_docker=False)
+        await client.connect()
 
         try:
             result = await client.session_create(headless=True)
@@ -346,7 +346,7 @@ class TestFullBrowserWorkflow:
     async def test_full_navigation_workflow(self, check_playwright_available):
         """Test complete navigation workflow: create, goto, snapshot, destroy."""
         client = SurfMCPClient()
-        await client.connect(use_docker=False)
+        await client.connect()
 
         try:
             # Create headless browser session
@@ -384,7 +384,7 @@ class TestFullBrowserWorkflow:
     async def test_browser_scroll(self, check_playwright_available):
         """Test browser scroll functionality."""
         client = SurfMCPClient()
-        await client.connect(use_docker=False)
+        await client.connect()
 
         try:
             result = await client.session_create(headless=True)

@@ -1,16 +1,16 @@
 """
-NavigatorDriver - Abstract base class for all navigation contexts.
+Browser driver base class.
 
-The Navigator abstraction provides a consistent mental model for "being somewhere
-and moving around" across different domains (filesystem, browser, future: database, API).
+Provides consistent interface for browser navigation and content operations
+with optional visual grounding via Fara.
 
 All drivers implement:
-- goto(location) - Navigate to a location
-- current() - Get current location
+- goto(url) - Navigate to URL
+- current() - Get current URL
 - back() / forward() - Navigate history
-- list() - List contents at current location
-- read(target) - Read content
-- snapshot() - Capture current state
+- list() - List links on page
+- read(target) - Read page content
+- snapshot() - Capture screenshot
 - cleanup() - Release resources
 """
 
@@ -27,12 +27,12 @@ from pydantic import BaseModel, Field
 
 
 class NavigatorState(BaseModel):
-    """State returned after navigation operations."""
+    """Result of navigation operations (goto, back, forward)."""
 
-    location: str = Field(..., description="Current location (path or URL)")
+    location: str = Field(..., description="Current URL")
     success: bool = Field(..., description="Whether the operation succeeded")
     snapshot: Optional[str] = Field(
-        None, description="base64 screenshot or JSON directory listing"
+        None, description="base64-encoded PNG screenshot"
     )
     error: Optional[str] = Field(None, description="Error message if failed")
 
@@ -40,7 +40,7 @@ class NavigatorState(BaseModel):
 class HistoryEntry(BaseModel):
     """Single entry in navigation history."""
 
-    location: str = Field(..., description="Location that was navigated to")
+    location: str = Field(..., description="URL that was navigated to")
     timestamp: datetime = Field(
         default_factory=_utc_now, description="When this navigation occurred"
     )
@@ -49,38 +49,38 @@ class HistoryEntry(BaseModel):
 
 class NavigatorDriver(ABC):
     """
-    Abstract base for all navigation contexts.
+    Abstract base class for browser drivers.
 
     Drivers maintain:
-    - Current location (cwd, URL, etc.)
+    - Current URL
     - Navigation history with forward/back capability
-    - Domain-specific operations (file I/O, click/type, etc.)
+    - Optional visual grounding via Fara for element interaction
     """
 
-    driver_type: str  # "filesystem" or "browser"
+    driver_type: str = "browser"
     history: List[HistoryEntry]
     history_index: int
 
     @abstractmethod
     async def goto(self, location: str) -> NavigatorState:
         """
-        Navigate to absolute or relative location.
+        Navigate to URL.
 
         Args:
-            location: Target location (path, URL, etc.)
+            location: Target URL
 
         Returns:
-            NavigatorState with success status and optional snapshot
+            NavigatorState with success status and screenshot
         """
         pass
 
     @abstractmethod
     async def current(self) -> str:
         """
-        Return current location.
+        Return current URL.
 
         Returns:
-            Current location as string (path, URL, etc.)
+            Current URL as string
         """
         pass
 
@@ -107,41 +107,39 @@ class NavigatorDriver(ABC):
     @abstractmethod
     async def list(self) -> List[Dict[str, Any]]:
         """
-        List contents at current location.
+        List links on current page.
 
         Returns:
-            List of entries with domain-specific metadata
-            - Filesystem: name, type, size, modified
-            - Browser: text, href
+            List of link entries with text and href
         """
         pass
 
     @abstractmethod
     async def read(self, target: Optional[str] = None) -> str:
         """
-        Read content at target (or current location).
+        Read page content.
 
         Args:
-            target: Optional relative target (filename, CSS selector)
+            target: Optional CSS selector to read specific element
 
         Returns:
-            Content as string
+            Page text content
         """
         pass
 
     @abstractmethod
     async def snapshot(self) -> str:
         """
-        Capture current state as base64.
+        Capture screenshot as base64 PNG.
 
         Returns:
-            base64-encoded snapshot (PNG for browser, JSON for filesystem)
+            base64-encoded PNG screenshot
         """
         pass
 
     @abstractmethod
     async def cleanup(self) -> None:
-        """Release resources (close browser, etc.)."""
+        """Release browser resources."""
         pass
 
     def _add_history(self, action: str, location: str) -> None:

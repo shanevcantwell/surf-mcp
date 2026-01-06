@@ -1,9 +1,8 @@
 """
-Universal navigation MCP commands.
+Browser navigation MCP commands.
 
-These work with any driver type:
-- goto: Navigate to location
-- current: Get current location
+- goto: Navigate to URL
+- current: Get current URL
 - back: Go back in history
 - forward: Go forward in history
 - history: Get navigation history
@@ -21,7 +20,7 @@ def get_tools() -> List[Tool]:
     return [
         Tool(
             name="goto",
-            description="Navigate to a location (path for filesystem, URL for browser)",
+            description="Navigate to URL",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -31,11 +30,11 @@ def get_tools() -> List[Tool]:
                     },
                     "driver": {
                         "type": "string",
-                        "description": "Driver alias (e.g., 'fs', 'web')",
+                        "description": "Driver alias (e.g., 'web')",
                     },
                     "location": {
                         "type": "string",
-                        "description": "Target location (path or URL)",
+                        "description": "Target URL",
                     },
                 },
                 "required": ["session_id", "driver", "location"],

@@ -73,6 +73,12 @@ def init_session_state():
         st.session_state.last_act = None
     if "last_act_auto" not in st.session_state:
         st.session_state.last_act_auto = None
+    # Multi-step autonomous mode toggle
+    if "autonomous_mode" not in st.session_state:
+        st.session_state.autonomous_mode = False
+    # Step viewer for autonomous mode
+    if "step_viewer_index" not in st.session_state:
+        st.session_state.step_viewer_index = 0
 
 
 def add_to_history(entry: str):
@@ -95,13 +101,23 @@ def refresh_screenshot():
 
 def execute_command(command: str):
     """
-    Execute a command - ALL commands go to Fara via act().
-
-    No parsing, no manipulation. Fara decides what to do.
+    Execute a command - routes to single-step or autonomous based on mode.
     """
     if not command.strip():
         return
 
+    if st.session_state.autonomous_mode:
+        execute_command_autonomous(command)
+    else:
+        execute_command_single(command)
+
+
+def execute_command_single(command: str):
+    """
+    Execute a single-step command via act().
+
+    No parsing, no manipulation. Fara decides what to do.
+    """
     add_to_history(f"> {command}")
 
     try:
@@ -135,6 +151,46 @@ def execute_command(command: str):
         add_to_history(f"  ✗ Error: {e}")
 
 
+def execute_command_autonomous(command: str):
+    """
+    Execute a multi-step command via act_autonomous().
+
+    Fara loops until task complete (terminate) or max steps.
+    """
+    add_to_history(f"🔄 {command}")
+    add_to_history("  [Autonomous mode - running until complete...]")
+
+    try:
+        client = st.session_state.client
+        session_id = st.session_state.session_id
+
+        # Multi-step execution
+        result = client.act_autonomous(session_id, command)
+        st.session_state.last_act_auto = result
+        st.session_state.step_viewer_index = 0  # Reset to first step
+
+        step_count = result.get("step_count", 0)
+        success = result.get("success", False)
+        reason = result.get("reason", "")
+
+        if success:
+            add_to_history(f"  ✓ Completed in {step_count} steps")
+        else:
+            add_to_history(f"  ✗ Failed after {step_count} steps: {reason}")
+
+        # Show step summary
+        steps = result.get("steps", [])
+        for step in steps[-5:]:  # Show last 5 steps
+            action = step.get("action", "unknown")
+            add_to_history(f"    Step {step.get('step_number', '?')}: {action}")
+
+        # Auto-refresh screenshot after completion
+        refresh_screenshot()
+
+    except Exception as e:
+        add_to_history(f"  ✗ Error: {e}")
+
+
 # ==================== Main UI ====================
 
 def main():
@@ -158,12 +214,31 @@ def main():
 
     # ==================== Command Input (Top - Enter submits) ====================
     if st.session_state.connected:
+        # Mode toggle above command input
+        col_mode, col_mode_label = st.columns([1, 5])
+        with col_mode:
+            st.session_state.autonomous_mode = st.toggle(
+                "🔄",
+                value=st.session_state.autonomous_mode,
+                help="Autonomous Mode: Loop until task complete (for multi-step goals)"
+            )
+        with col_mode_label:
+            if st.session_state.autonomous_mode:
+                st.caption("**Autonomous** - multi-step until complete")
+            else:
+                st.caption("**Single-step** - one action per command")
+
         with st.form(key="command_form", clear_on_submit=True):
             col_input, col_submit = st.columns([5, 1])
             with col_input:
+                placeholder = (
+                    'goto google.com, search for "olde boston bulldogges", click I\'m Feeling Lucky'
+                    if st.session_state.autonomous_mode
+                    else 'the search button | click "Sign in" | type "email" user@example.com'
+                )
                 command = st.text_input(
                     "Command",
-                    placeholder='the search button | click "Sign in" | type "email" user@example.com',
+                    placeholder=placeholder,
                     label_visibility="collapsed",
                 )
             with col_submit:
@@ -200,6 +275,67 @@ def main():
             st.info("Connected. Enter a URL below or use `goto https://...`")
         else:
             st.info("Click 'Connect' to start a browser session.")
+
+        # ==================== Step Viewer (Autonomous Mode) ====================
+        if st.session_state.last_act_auto:
+            result = st.session_state.last_act_auto
+            steps = result.get("steps", [])
+
+            if steps:
+                with st.expander(f"📊 Step Viewer ({len(steps)} steps)", expanded=False):
+                    # Navigation
+                    col_prev, col_info, col_next = st.columns([1, 3, 1])
+
+                    idx = st.session_state.step_viewer_index
+                    idx = max(0, min(idx, len(steps) - 1))
+
+                    with col_prev:
+                        if st.button("◀ Prev", disabled=(idx == 0), use_container_width=True):
+                            st.session_state.step_viewer_index = idx - 1
+                            st.rerun()
+
+                    with col_info:
+                        step = steps[idx]
+                        action = step.get("action", "unknown")
+                        success = step.get("success", True)
+                        status = "✓" if success else "✗"
+                        st.markdown(f"**Step {idx + 1}/{len(steps)}**: `{action}` {status}")
+
+                    with col_next:
+                        if st.button("Next ▶", disabled=(idx >= len(steps) - 1), use_container_width=True):
+                            st.session_state.step_viewer_index = idx + 1
+                            st.rerun()
+
+                    # Step details
+                    step = steps[idx]
+                    coord = step.get("coordinate")
+                    text = step.get("text")
+                    reasoning = step.get("reasoning", "")
+
+                    details = []
+                    if coord:
+                        details.append(f"📍 Coordinates: ({coord[0]}, {coord[1]})")
+                    if text:
+                        details.append(f"📝 Text: `{text}`")
+                    if reasoning:
+                        details.append(f"💭 Reasoning: {reasoning[:100]}...")
+
+                    if details:
+                        st.caption("\n".join(details))
+
+                    # Step screenshot if available
+                    screenshot_b64 = step.get("screenshot")
+                    if screenshot_b64:
+                        try:
+                            step_img = decode_screenshot(screenshot_b64)
+                            # Draw overlay for click actions
+                            if coord and step.get("action") in ("left_click", "click", "type"):
+                                step_img = draw_overlay(step_img, x=coord[0], y=coord[1])
+                            st.image(step_img, caption=f"Step {idx + 1} screenshot", use_container_width=True)
+                        except Exception as e:
+                            st.caption(f"(Screenshot not available: {e})")
+                    else:
+                        st.caption("(No screenshot for this step)")
 
     # ==================== Sidebar ====================
     with col_sidebar:

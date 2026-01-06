@@ -84,6 +84,12 @@ class FaraToolCall:
     keys: Optional[List[str]] = None
     """Key names to press (for key action), e.g., ['Enter'], ['Control', 'c']."""
 
+    delete_existing_text: bool = False
+    """For type action: clear existing text before typing (Ctrl+A, Delete)."""
+
+    press_enter: bool = False
+    """For type action: press Enter after typing."""
+
     confidence: float = 1.0
     """Model confidence 0.0-1.0."""
 

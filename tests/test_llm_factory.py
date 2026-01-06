@@ -334,16 +334,51 @@ class TestFaraResponseParsing:
         assert "terminate" in result.reasoning
 
     def test_parse_serpico_format(self, grounder):
-        """Parse Fara's serpico tool_call format."""
+        """Parse Fara's serpico format where x field contains [x, y] coords."""
         tool_json = {
             "name": "serpico",
-            "arguments": {"found": True, "x": [300, 400]}
+            "arguments": {"found": True, "x": [300, 400]}  # x=[x_coord, y_coord]
         }
         result = grounder._normalize_tool_call(tool_json)
 
         assert result.found is True
-        assert result.x == 300
-        assert result.y == 400
+        assert result.x == 300  # x_coord[0]
+        assert result.y == 400  # x_coord[1]
+
+    def test_parse_json_output_format(self, grounder):
+        """Parse Fara's json_output format with bounding boxes."""
+        tool_json = {
+            "name": "json_output",
+            "value": {
+                "found": True,
+                "x": [720, 446],
+                "y": [483, 351],
+                "confidence": 1.0,
+                "reasoning": "Found the button"
+            }
+        }
+        result = grounder._normalize_tool_call(tool_json)
+
+        assert result.found is True
+        # Center of bounding box
+        assert result.x == 583  # (720 + 446) / 2
+        assert result.y == 417  # (483 + 351) / 2
+        assert result.confidence == 1.0
+        assert result.reasoning == "Found the button"
+
+    def test_parse_json_output_not_found(self, grounder):
+        """Parse json_output when element not found."""
+        tool_json = {
+            "name": "json_output",
+            "value": {
+                "found": False,
+                "reasoning": "Element not visible"
+            }
+        }
+        result = grounder._normalize_tool_call(tool_json)
+
+        assert result.found is False
+        assert "not visible" in result.reasoning
 
     def test_parse_unknown_format_returns_not_found(self, grounder):
         """Unknown tool_call format returns found=False with debug info."""
