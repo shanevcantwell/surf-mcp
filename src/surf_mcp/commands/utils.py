@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Type
 if TYPE_CHECKING:
     from ..drivers.base import NavigatorDriver
     from ..drivers.browser import BrowserDriver
-    from ..drivers.filesystem import FileSystemDriver
     from ..session_manager import SessionManager
 
 
@@ -26,7 +25,7 @@ async def get_driver(
     Args:
         manager: SessionManager instance
         args: Command arguments containing session_id and driver
-        expected_type: Optional type check (BrowserDriver, FileSystemDriver)
+        expected_type: Optional type check (e.g., BrowserDriver)
 
     Returns:
         Tuple of (driver, error_dict). If successful, error_dict is None.
@@ -69,21 +68,6 @@ async def get_browser_driver(
         return None, error
     # Type narrowing for mypy
     assert isinstance(driver, BrowserDriver)
-    return driver, None
-
-
-async def get_filesystem_driver(
-    manager: SessionManager,
-    args: Dict[str, Any],
-) -> Tuple[Optional[FileSystemDriver], Optional[Dict[str, str]]]:
-    """Get filesystem driver with type validation."""
-    from ..drivers.filesystem import FileSystemDriver
-
-    driver, error = await get_driver(manager, args, FileSystemDriver)
-    if error:
-        return None, error
-    # Type narrowing for mypy
-    assert isinstance(driver, FileSystemDriver)
     return driver, None
 
 

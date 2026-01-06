@@ -1,7 +1,7 @@
 """
 Session lifecycle MCP commands.
 
-- session_create: Create session with one or more drivers
+- session_create: Create session with browser driver
 - session_destroy: Cleanup session and all drivers
 - session_list: List active sessions
 """
@@ -18,7 +18,7 @@ def get_tools() -> List[Tool]:
     return [
         Tool(
             name="session_create",
-            description="Create a new navigator session with one or more drivers",
+            description="Create a new browser session for visual automation",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -30,31 +30,27 @@ def get_tools() -> List[Tool]:
                             "properties": {
                                 "type": {
                                     "type": "string",
-                                    "enum": ["filesystem", "browser"],
-                                    "description": "Driver type",
-                                },
-                                "root": {
-                                    "type": "string",
-                                    "description": "Root directory (filesystem only)",
-                                },
-                                "sandbox": {
-                                    "type": "boolean",
-                                    "description": "Enforce sandbox boundary (filesystem only)",
-                                    "default": True,
+                                    "enum": ["browser"],
+                                    "description": "Driver type (only 'browser' is supported)",
                                 },
                                 "headless": {
                                     "type": "boolean",
-                                    "description": "Run headless (browser only)",
+                                    "description": "Run browser in headless mode",
                                     "default": True,
                                 },
                                 "viewport": {
                                     "type": "array",
                                     "items": {"type": "integer"},
-                                    "description": "Viewport [width, height] (browser only)",
+                                    "description": "Viewport [width, height]",
                                 },
                                 "storage_state": {
                                     "type": "object",
-                                    "description": "Playwright storage state to restore (cookies, localStorage) (browser only)",
+                                    "description": "Playwright storage state to restore (cookies, localStorage)",
+                                },
+                                "visual_grounding": {
+                                    "type": "boolean",
+                                    "description": "Enable visual grounding via Fara",
+                                    "default": True,
                                 },
                             },
                             "required": ["type"],

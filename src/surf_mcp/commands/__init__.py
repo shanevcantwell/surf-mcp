@@ -6,6 +6,6 @@ Each module provides:
 - Command handler functions
 """
 
-from . import session, navigation, content, filesystem, browser
+from . import session, navigation, content, browser
 
-__all__ = ["session", "navigation", "content", "filesystem", "browser"]
+__all__ = ["session", "navigation", "content", "browser"]

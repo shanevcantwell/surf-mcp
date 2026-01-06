@@ -1,14 +1,13 @@
 """
-Navigator MCP Server.
+Surf MCP Server.
 
-Unified MCP server for persistent navigation across filesystem and browser domains.
+MCP server for visual browser automation via Fara.
 """
 
-__version__ = "0.3.0"
+__version__ = "0.5.0"
 
 from .session_manager import SessionManager
 from .drivers.base import NavigatorDriver, NavigatorState, HistoryEntry
-from .drivers.filesystem import FileSystemDriver
 from .drivers.browser import BrowserDriver
 
 __all__ = [
@@ -16,6 +15,5 @@ __all__ = [
     "NavigatorDriver",
     "NavigatorState",
     "HistoryEntry",
-    "FileSystemDriver",
     "BrowserDriver",
 ]

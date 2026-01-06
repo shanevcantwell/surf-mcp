@@ -8,9 +8,8 @@ import asyncio
 import json
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -131,7 +130,7 @@ class TestStorageStateRoundTrip:
 class TestCommandHandling:
     """Test that all commands go directly to Fara.
 
-    Per user feedback: No command parsing, no string manipulation.
+    Per ADR-005: No command parsing, no string manipulation.
     All user input goes directly to MCP act() endpoint.
     """
 
@@ -141,8 +140,8 @@ class TestCommandHandling:
         # Now they all go directly to Fara via act().
         test_cases = [
             "click the search button",
-            "goto https://google.com",  # Fara handles navigation
-            "scroll down",  # Fara handles scrolling
+            "goto https://google.com",
+            "scroll down",
             "type hello into the search box",
             "press enter",
         ]
@@ -191,7 +190,7 @@ class TestMCPServerIntegration:
     """Integration tests that start actual surf-mcp server.
 
     These tests are marked as integration and require:
-    - surf-mcp to be installed
+    - surf-mcp to be installed (pip install -e .)
     - Playwright chromium (for browser tests)
 
     Run with: pytest -m integration
@@ -201,21 +200,21 @@ class TestMCPServerIntegration:
     def check_server_available(self):
         """Check if surf-mcp is available."""
         try:
-            result = subprocess.run(
+            subprocess.run(
                 ["surf-mcp", "--help"],
                 capture_output=True,
                 timeout=5,
             )
             return True
         except (subprocess.TimeoutExpired, FileNotFoundError):
-            pytest.skip("ENVIRONMENT: Requires 'pip install -e .' (surf-mcp not on PATH)")
+            pytest.skip("Requires: pip install -e . (surf-mcp not on PATH)")
 
     @pytest.mark.asyncio
     async def test_client_connect_disconnect(self, check_server_available):
         """Test basic connect/disconnect cycle."""
         client = SurfMCPClient()
 
-        await client.connect()
+        await client.connect(use_docker=False)
         assert client._connected is True
 
         await client.disconnect()
@@ -225,51 +224,12 @@ class TestMCPServerIntegration:
     async def test_session_list_empty(self, check_server_available):
         """Test session_list on fresh server."""
         client = SurfMCPClient()
-        await client.connect()
+        await client.connect(use_docker=False)
 
         try:
             result = await client.session_list()
             assert "sessions" in result
             assert isinstance(result["sessions"], list)
-        finally:
-            await client.disconnect()
-
-    @pytest.mark.asyncio
-    async def test_filesystem_session_roundtrip(
-        self, check_server_available, temp_workspace
-    ):
-        """Test creating filesystem session (no playwright needed)."""
-        client = SurfMCPClient()
-        await client.connect()
-
-        try:
-            # Create filesystem session directly via call_tool
-            result = await client.call_tool(
-                "session_create",
-                {
-                    "drivers": {
-                        "fs": {
-                            "type": "filesystem",
-                            "root": str(temp_workspace),
-                            "sandbox": True,
-                        }
-                    }
-                },
-            )
-
-            assert "session_id" in result
-            session_id = result["session_id"]
-
-            # List should show session
-            list_result = await client.session_list()
-            assert any(s["session_id"] == session_id for s in list_result["sessions"])
-
-            # Destroy session
-            destroy_result = await client.call_tool(
-                "session_destroy", {"session_id": session_id}
-            )
-            assert "success" in destroy_result or "summary" in destroy_result
-
         finally:
             await client.disconnect()
 
@@ -294,7 +254,7 @@ class TestBrowserIntegration:
                 browser.close()
             return True
         except Exception as e:
-            pytest.skip(f"ENVIRONMENT: Requires 'playwright install chromium' ({e})")
+            pytest.skip(f"Requires: playwright install chromium ({e})")
 
     @pytest.mark.asyncio
     async def test_browser_session_with_storage_state(
@@ -302,7 +262,7 @@ class TestBrowserIntegration:
     ):
         """Test browser session with storage_state round-trip."""
         client = SurfMCPClient()
-        await client.connect()
+        await client.connect(use_docker=False)
 
         try:
             # Create browser session with empty storage_state
@@ -340,7 +300,7 @@ class TestBrowserIntegration:
     async def test_browser_snapshot(self, check_playwright_available):
         """Test taking browser screenshot."""
         client = SurfMCPClient()
-        await client.connect()
+        await client.connect(use_docker=False)
 
         try:
             result = await client.session_create(headless=True)
@@ -365,101 +325,6 @@ class TestBrowserIntegration:
 
 
 @pytest.mark.integration
-@pytest.mark.skip(reason="FRAMEWORK: disconnect() fails in pytest due to anyio task affinity - operations work, only cleanup fails")
-class TestSyncClientIntegration:
-    """Integration tests using the sync wrapper (as Streamlit would).
-
-    These tests are skipped because anyio task groups require exit from the same
-    task as entry. In pytest, connect() and disconnect() run in different task
-    contexts, causing "Attempted to exit cancel scope in different task" error.
-
-    The actual operations WORK - only the cleanup fails. In production Streamlit,
-    the client stays alive across reruns and process exit handles cleanup.
-    """
-
-    @pytest.fixture
-    def check_server_available(self):
-        """Check if surf-mcp is available."""
-        import subprocess
-
-        try:
-            subprocess.run(
-                ["surf-mcp", "--help"],
-                capture_output=True,
-                timeout=5,
-            )
-            return True
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            pytest.skip("ENVIRONMENT: Requires 'pip install -e .' (surf-mcp not on PATH)")
-
-    def test_sync_client_connect_disconnect(self, check_server_available):
-        """Test sync client connect/disconnect cycle."""
-        client = SyncSurfClient()
-        client.connect()
-
-        # Should be connected
-        assert client._client._connected is True
-
-        client.disconnect()
-        assert client._client._connected is False
-
-    def test_sync_client_filesystem_roundtrip(
-        self, check_server_available, temp_workspace
-    ):
-        """Test sync client with filesystem driver."""
-        client = SyncSurfClient()
-        client.connect()
-
-        try:
-            # Create filesystem session using call_tool through _run
-            result = client._run(
-                client._client.call_tool(
-                    "session_create",
-                    {
-                        "drivers": {
-                            "fs": {
-                                "type": "filesystem",
-                                "root": str(temp_workspace),
-                                "sandbox": True,
-                            }
-                        }
-                    },
-                )
-            )
-
-            assert "session_id" in result
-            session_id = result["session_id"]
-
-            # Navigate in filesystem
-            goto_result = client._run(
-                client._client.call_tool(
-                    "goto",
-                    {"session_id": session_id, "driver": "fs", "location": "."},
-                )
-            )
-            assert goto_result.get("success", True)
-
-            # List contents
-            list_result = client._run(
-                client._client.call_tool(
-                    "list",
-                    {"session_id": session_id, "driver": "fs"},
-                )
-            )
-            assert "entries" in list_result
-
-            # Destroy
-            client._run(
-                client._client.call_tool(
-                    "session_destroy", {"session_id": session_id}
-                )
-            )
-
-        finally:
-            client.disconnect()
-
-
-@pytest.mark.integration
 @pytest.mark.browser
 class TestFullBrowserWorkflow:
     """Full browser workflow tests (navigate, snapshot, interact)."""
@@ -475,13 +340,13 @@ class TestFullBrowserWorkflow:
                 browser.close()
             return True
         except Exception as e:
-            pytest.skip(f"ENVIRONMENT: Requires 'playwright install chromium' ({e})")
+            pytest.skip(f"Requires: playwright install chromium ({e})")
 
     @pytest.mark.asyncio
     async def test_full_navigation_workflow(self, check_playwright_available):
         """Test complete navigation workflow: create, goto, snapshot, destroy."""
         client = SurfMCPClient()
-        await client.connect()
+        await client.connect(use_docker=False)
 
         try:
             # Create headless browser session
@@ -519,7 +384,7 @@ class TestFullBrowserWorkflow:
     async def test_browser_scroll(self, check_playwright_available):
         """Test browser scroll functionality."""
         client = SurfMCPClient()
-        await client.connect()
+        await client.connect(use_docker=False)
 
         try:
             result = await client.session_create(headless=True)

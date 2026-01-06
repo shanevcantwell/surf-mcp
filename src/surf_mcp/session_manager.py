@@ -1,8 +1,7 @@
 """
-SessionManager - Multi-driver session pool for Navigator MCP.
+SessionManager - Multi-driver session pool for Surf MCP.
 
-Sessions can contain multiple drivers (e.g., filesystem + browser), enabling
-cross-domain workflows like downloading web content to local files.
+Sessions contain browser drivers for visual automation via Fara.
 
 Session lifecycle:
 1. Create session with driver configuration
@@ -55,10 +54,6 @@ class Session:
             driver_summary = {}
 
             # Collect driver-specific stats
-            if hasattr(driver, "files_read"):
-                driver_summary["files_read"] = driver.files_read
-            if hasattr(driver, "files_written"):
-                driver_summary["files_written"] = driver.files_written
             if hasattr(driver, "screenshots"):
                 driver_summary["screenshots_taken"] = len(driver.screenshots)
             if hasattr(driver, "history"):
@@ -119,7 +114,6 @@ class SessionManager:
         Args:
             drivers_config: Dict mapping alias to driver config
                 {
-                    "fs": {"type": "filesystem", "root": "/path", "sandbox": True},
                     "web": {"type": "browser", "headless": True}
                 }
 
@@ -200,14 +194,7 @@ class SessionManager:
         self, driver_type: str, config: Dict[str, Any]
     ) -> NavigatorDriver:
         """Create a driver instance based on type."""
-        if driver_type == "filesystem":
-            from .drivers.filesystem import FileSystemDriver
-
-            root = config.get("root", ".")
-            sandbox = config.get("sandbox", True)
-            return FileSystemDriver(root=root, sandbox=sandbox)
-
-        elif driver_type == "browser":
+        if driver_type == "browser":
             from .drivers.browser import BrowserDriver
             from .security import validate_storage_state
 
@@ -237,7 +224,7 @@ class SessionManager:
             return driver
 
         else:
-            raise ValueError(f"Unknown driver type: {driver_type}")
+            raise ValueError(f"Unknown driver type: {driver_type}. Only 'browser' is supported.")
 
     async def _get_visual_grounder(self, use_failover: bool = True):
         """

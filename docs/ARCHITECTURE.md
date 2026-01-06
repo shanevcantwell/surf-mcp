@@ -255,7 +255,7 @@ Location: `src/surf_mcp/llm/lmstudio_discovery.py`, `factory.py`
 **Configuration:**
 ```bash
 LMSTUDIO_SERVERS="rtx3090=http://localhost:1234/v1,rtx8000=http://192.168.1.100:1234/v1"
-FARA_MODEL_IDS="microsoft_fara-7b,fara-7b-gguf,gao-zijian/fara-7b"
+FARA_MODEL_IDS="microsoft_fara-7b,fara-7b-gguf"
 FARA_MAX_FAILURES=2
 FARA_PROBE_TIMEOUT=2.0
 ```
