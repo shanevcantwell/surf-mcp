@@ -212,7 +212,8 @@ class PlaywrightExecutor:
                         allowed, reason = self._domain_filter.check(tool_call.url)
                         if not allowed:
                             raise BlockedDomainError(reason)
-                    await page.goto(tool_call.url, wait_until="networkidle")
+                    # Use domcontentloaded - networkidle times out on ad-heavy sites
+                    await page.goto(tool_call.url, wait_until="domcontentloaded", timeout=15000)
 
                 case "terminate":
                     # Task complete signal - no action needed
