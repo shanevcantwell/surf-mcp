@@ -152,8 +152,8 @@ Primary consumer. Integration documented in `docs/reports/NAVIGATION_MCP_CONSUME
 
 ### Deferred ADRs
 
-- **ADR-004:** Compact storage state (deferred - base64 works for now)
-- **ADR-002:** Strategy architecture (partially implemented, scope reduced)
+- **ADR-SURF-004:** Compact storage state (deferred - base64 works for now)
+- **ADR-SURF-002:** Strategy architecture (partially implemented, scope reduced)
 
 ---
 
@@ -166,7 +166,7 @@ Primary consumer. Integration documented in `docs/reports/NAVIGATION_MCP_CONSUME
 | 2025-12-20 | Stay at 0.x | Not ready for 1.0 stability commitment |
 | 2025-12-20 | Docker Hub primary | Container includes browser, easier than pip install + playwright |
 | 2025-12-13 | Auto-switch new tabs | User intent for single-prompt actions |
-| 2025-12-10 | ADR-005 Direct Fara | Let Fara decide action, don't parse commands |
+| 2025-12-10 | ADR-SURF-005 Direct Fara | Let Fara decide action, don't parse commands |
 
 ---
 

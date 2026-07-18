@@ -1,4 +1,4 @@
-# ADR-006: Public Release Security Hardening
+# ADR-SURF-006: Public Release Security Hardening
 
 **Status:** Accepted
 **Date:** 2025-12-21

@@ -1,4 +1,4 @@
-# ADR-001: Agentic Browser Security Controls
+# ADR-SURF-001: Agentic Browser Security Controls
 
 **Status:** Accepted (Phase 1 Complete)
 **Date:** 2025-12-08

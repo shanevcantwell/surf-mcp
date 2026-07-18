@@ -1,4 +1,4 @@
-# ADR-004: Compact Storage State for LLM Contexts
+# ADR-SURF-004: Compact Storage State for LLM Contexts
 
 **Status:** Proposed
 **Date:** 2025-12-11
@@ -99,7 +99,7 @@ result = await session.call_tool("session_destroy", {
 
 **Defer to v0.4.0+**
 
-Current priority is the Fara test harness (ADR-003), which uses direct MCP calls where token cost doesn't matter. Revisit when:
+Current priority is the Fara test harness (ADR-SURF-003), which uses direct MCP calls where token cost doesn't matter. Revisit when:
 
 1. LAS integration is active and token usage is measurable
 2. We have real data on storage_state sizes across target sites
@@ -109,13 +109,13 @@ Current priority is the Fara test harness (ADR-003), which uses direct MCP calls
 
 ## References
 
-- [ADR-002: Strategy Architecture](./ADR-002_Strategy_Architecture.md) - Session/credential separation (proposed)
+- [ADR-SURF-002: Strategy Architecture](./ADR-SURF-002_Strategy_Architecture.md) - Session/credential separation (proposed)
 - [Playwright Storage State](https://playwright.dev/docs/auth)
 
 ## Dependencies
 
 This ADR depends on:
-- **ADR-003 Fara Test Harness** (complete, archived): Harness uses direct MCP calls where token cost doesn't matter
+- **ADR-SURF-003 Fara Test Harness** (complete, archived): Harness uses direct MCP calls where token cost doesn't matter
 - **LAS integration**: Revisit when LLM agent orchestration is active and token usage is measurable
 
 Currently deferred - the harness validates storage_state round-trip works; compact format is an optimization for when LLM agents manage browser sessions.

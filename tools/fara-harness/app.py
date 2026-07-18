@@ -3,7 +3,7 @@ Fara Test Harness - Streamlit UI for visual grounding experimentation.
 
 Run with: streamlit run app.py
 
-Per ADR-003: Interactive harness for testing Fara visual grounding
+Per ADR-SURF-003: Interactive harness for testing Fara visual grounding
 through MCP exclusively (no direct imports from surf-mcp).
 """
 
@@ -68,7 +68,7 @@ def init_session_state():
         st.session_state.last_locate = None
     if "connected" not in st.session_state:
         st.session_state.connected = False
-    # ADR-005: Track last act result for tool_call display
+    # ADR-SURF-005: Track last act result for tool_call display
     if "last_act" not in st.session_state:
         st.session_state.last_act = None
     if "last_act_auto" not in st.session_state:

@@ -81,7 +81,7 @@ class NavigatorDriver(ABC):
 - `NavigatorState`: Result of navigation operations (location, success, snapshot, error)
 - `HistoryEntry`: Single navigation history item (location, timestamp, action)
 
-### FaraToolCall (ADR-005)
+### FaraToolCall (ADR-SURF-005)
 
 Location: `src/surf_mcp/llm/base.py`
 
@@ -163,8 +163,8 @@ Navigates web pages via Playwright with visual grounding for element interaction
 | `type(description, text)` | Type into element |
 | `scroll(direction, amount)` | Scroll page |
 | `wait(description, seconds)` | Wait for element/delay |
-| `act(goal)` | Direct Fara execution (ADR-005) |
-| `act_autonomous(goal)` | Multi-step autonomous (ADR-005) |
+| `act(goal)` | Direct Fara execution (ADR-SURF-005) |
+| `act_autonomous(goal)` | Multi-step autonomous (ADR-SURF-005) |
 | `snapshot()` | Base64 PNG screenshot |
 
 **Multi-Tab Handling:**
@@ -225,7 +225,7 @@ class VisualGrounder(ABC):
     async def get_action(goal: str, screenshot_b64: str) -> FaraToolCall
 ```
 
-The key method is `get_action()` (ADR-005) which returns a complete FaraToolCall rather than just coordinates.
+The key method is `get_action()` (ADR-SURF-005) which returns a complete FaraToolCall rather than just coordinates.
 
 ### Adapters
 
@@ -266,7 +266,7 @@ FARA_PROBE_TIMEOUT=2.0
 
 Location: `src/surf_mcp/security/`
 
-Per ADR-001 Phase 1, browser automation includes security controls.
+Per ADR-SURF-001 Phase 1, browser automation includes security controls.
 
 ### DomainFilter
 
@@ -345,7 +345,7 @@ Location: `src/surf_mcp/commands/`
 - `type`: Type into element by description
 - `scroll`: Scroll page
 - `wait`: Wait for element or delay
-- `act`: Direct Fara execution - Fara decides the action (ADR-005)
+- `act`: Direct Fara execution - Fara decides the action (ADR-SURF-005)
 - `act_autonomous`: Multi-step autonomous execution until task complete
 
 ---
@@ -365,7 +365,7 @@ Location: `src/surf_mcp/commands/`
 8. Server returns {summary: {web: {storage_state: {...}}}}
 ```
 
-### Direct Fara Execution (ADR-005)
+### Direct Fara Execution (ADR-SURF-005)
 
 ```
 1. Client → act({session_id, driver: web, goal: "click the search button"})
@@ -481,8 +481,8 @@ surf-mcp/
 │   │   ├── __init__.py
 │   │   ├── base.py              # NavigatorDriver ABC
 │   │   ├── browser.py           # BrowserDriver with visual grounding
-│   │   ├── playwright_executor.py  # Direct Fara action execution (ADR-005)
-│   │   └── agent_runner.py      # Autonomous multi-step execution (ADR-005)
+│   │   ├── playwright_executor.py  # Direct Fara action execution (ADR-SURF-005)
+│   │   └── agent_runner.py      # Autonomous multi-step execution (ADR-SURF-005)
 │   ├── commands/
 │   │   ├── __init__.py
 │   │   ├── session.py           # Session lifecycle commands
@@ -500,9 +500,9 @@ surf-mcp/
 │   │   └── json_utils.py        # JSON extraction from LLM responses
 │   └── security/
 │       ├── __init__.py
-│       ├── domain_filter.py     # URL allowlist/blocklist (ADR-001)
-│       ├── rate_limiter.py      # Token bucket limiting (ADR-001)
-│       └── audit.py             # Action logging (ADR-001)
+│       ├── domain_filter.py     # URL allowlist/blocklist (ADR-SURF-001)
+│       ├── rate_limiter.py      # Token bucket limiting (ADR-SURF-001)
+│       └── audit.py             # Action logging (ADR-SURF-001)
 ├── tools/
 │   └── fara-harness/            # Interactive test harness
 │       ├── app.py               # Streamlit UI
@@ -520,12 +520,12 @@ surf-mcp/
 │   ├── ARCHITECTURE.md          # This file
 │   ├── TEST_SUMMARY.md          # Auto-generated test summary
 │   └── adr/
-│       ├── ADR-001_Agentic_Browser_Security.md  # Phase 1 Complete
-│       ├── ADR-002_Strategy_Architecture.md     # Proposed
-│       ├── ADR-004_Compact_Storage_State.md     # Deferred
+│       ├── ADR-SURF-001_Agentic_Browser_Security.md  # Phase 1 Complete
+│       ├── ADR-SURF-002_Strategy_Architecture.md     # Proposed
+│       ├── ADR-SURF-004_Compact_Storage_State.md     # Deferred
 │       └── complete/
-│           ├── ADR-003_Fara_Test_Harness.md     # Complete
-│           └── ADR-005_Direct_Fara_Execution.md # Complete
+│           ├── ADR-SURF-003_Fara_Test_Harness.md     # Complete
+│           └── ADR-SURF-005_Direct_Fara_Execution.md # Complete
 ├── pyproject.toml
 ├── Dockerfile
 ├── docker-compose.yml
@@ -548,7 +548,7 @@ surf-mcp/
 
 ## Security Considerations
 
-See [ADR-001: Agentic Browser Security](adr/ADR-001_Agentic_Browser_Security.md) for detailed security analysis.
+See [ADR-SURF-001: Agentic Browser Security](adr/ADR-SURF-001_Agentic_Browser_Security.md) for detailed security analysis.
 
 **Implemented (Phase 1):**
 - Domain allowlist/blocklist with sensible defaults

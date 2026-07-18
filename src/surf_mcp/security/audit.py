@@ -1,7 +1,7 @@
 """
 Audit Logging for browser automation actions.
 
-Provides forensic capability per ADR-001 Phase 1.
+Provides forensic capability per ADR-SURF-001 Phase 1.
 """
 
 import hashlib

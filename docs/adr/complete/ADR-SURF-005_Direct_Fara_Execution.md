@@ -1,4 +1,4 @@
-# ADR-005: Direct Fara Execution Architecture
+# ADR-SURF-005: Direct Fara Execution Architecture
 
 **Status:** Complete
 **Date:** 2025-12-11
@@ -309,8 +309,8 @@ FARA_MAX_AGENT_STEPS=20
 
 ## References
 
-- [ADR-001: Agentic Browser Security](./ADR-001_Agentic_Browser_Security.md)
-- [ADR-003: Fara Test Harness](./ADR-003_Fara_Test_Harness.md)
+- [ADR-SURF-001: Agentic Browser Security](../ADR-SURF-001_Agentic_Browser_Security.md)
+- [ADR-SURF-003: Fara Test Harness](./ADR-SURF-003_Fara_Test_Harness.md)
 - [Fara-7B on Hugging Face](https://huggingface.co/gao-zijian/fara-7b)
 - [Playwright Documentation](https://playwright.dev/python/docs/api/class-page)
 - [MCP Progress Notifications](https://modelcontextprotocol.io/specification/2025-03-26/basic/utilities/progress/)

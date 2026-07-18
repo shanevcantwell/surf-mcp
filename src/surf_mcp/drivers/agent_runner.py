@@ -1,7 +1,7 @@
 """
 AgentRunner - Autonomous Fara execution with progress streaming.
 
-Per ADR-005: Runs Fara in an autonomous loop until the task is complete
+Per ADR-SURF-005: Runs Fara in an autonomous loop until the task is complete
 (terminate action) or cancelled. Supports MCP progress notifications
 and cancellation.
 
