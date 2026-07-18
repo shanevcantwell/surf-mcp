@@ -177,7 +177,7 @@ class TestStorageStateSerialization:
 class TestCommandArchitecture:
     """Test harness command handling architecture.
 
-    Per ADR-005: All user commands go directly to Fara via act().
+    Per ADR-SURF-005: All user commands go directly to Fara via act().
     The harness does NOT parse or interpret commands.
     """
 

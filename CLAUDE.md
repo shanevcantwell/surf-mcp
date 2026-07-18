@@ -13,7 +13,7 @@ Surf uses multimodal LLMs (Fara-7B via LM Studio, or Gemini/GPT-4V) to locate UI
 
 An AI that can *see* the page doesn't need to parse HTML.
 
-### Direct Fara Execution (ADR-005)
+### Direct Fara Execution (ADR-SURF-005)
 Fara returns complete tool_calls, not just coordinates. We execute what Fara decides:
 
 ```json
@@ -118,7 +118,7 @@ Markers indicate what external dependencies a test REQUIRES:
 ### Session Isolation
 Each session is independent with its own browser context.
 
-### Security Controls (ADR-001)
+### Security Controls (ADR-SURF-001)
 - **DomainFilter**: URL allowlist/blocklist with sensible defaults
 - **RateLimiter**: Token bucket limiting (30 actions/minute)
 - **AuditLogger**: Forensic logging with screenshot hashing
@@ -137,8 +137,8 @@ Commands return structured results with success/error fields. Never raise except
 ### Drivers
 - `src/surf_mcp/drivers/base.py` - NavigatorDriver interface
 - `src/surf_mcp/drivers/browser.py` - BrowserDriver with visual grounding
-- `src/surf_mcp/drivers/playwright_executor.py` - Direct Fara action execution (ADR-005)
-- `src/surf_mcp/drivers/agent_runner.py` - Autonomous multi-step execution (ADR-005)
+- `src/surf_mcp/drivers/playwright_executor.py` - Direct Fara action execution (ADR-SURF-005)
+- `src/surf_mcp/drivers/agent_runner.py` - Autonomous multi-step execution (ADR-SURF-005)
 
 ### LLM Adapters
 - `src/surf_mcp/llm/base.py` - VisualGrounder ABC, FaraToolCall dataclass

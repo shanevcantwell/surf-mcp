@@ -1,4 +1,4 @@
-# ADR-003: Fara Visual Grounding Test Harness
+# ADR-SURF-003: Fara Visual Grounding Test Harness
 
 **Status:** Complete
 **Date:** 2025-12-10
@@ -9,7 +9,7 @@
 
 ## Context
 
-Before designing complex strategy systems (ADR-002), we need hands-on experience with Fara-7b's visual grounding capabilities. A test harness will let us:
+Before designing complex strategy systems (ADR-SURF-002), we need hands-on experience with Fara-7b's visual grounding capabilities. A test harness will let us:
 
 1. Experiment with different prompt formulations
 2. Understand Fara's coordinate accuracy and failure modes
@@ -181,7 +181,7 @@ if st.button("Go") and prompt:
 
 - [Fara-7b on Hugging Face](https://huggingface.co/gao-zijian/fara-7b)
 - [Streamlit Documentation](https://docs.streamlit.io/)
-- [ADR-002: Strategy Architecture](./ADR-002_Strategy_Architecture.md)
+- [ADR-SURF-002: Strategy Architecture](../ADR-SURF-002_Strategy_Architecture.md)
 
 ---
 
@@ -189,7 +189,7 @@ if st.button("Go") and prompt:
 
 **Complete** - Harness implemented in `tools/fara-harness/` using Streamlit as recommended. Key learnings:
 
-1. **Fara as agent**: Led to ADR-005 (Direct Fara Execution) - Fara decides actions, not just coordinates
+1. **Fara as agent**: Led to ADR-SURF-005 (Direct Fara Execution) - Fara decides actions, not just coordinates
 2. **No command parsing**: User input goes directly to Fara without manipulation (harness doesn't interpret)
 3. **MCP-only access**: Harness communicates via MCP, never imports navigator-mcp directly
 

@@ -1,4 +1,4 @@
-# ADR-002: Strategy Architecture
+# ADR-SURF-002: Strategy Architecture
 
 **Status:** Proposed (Stub)
 **Date:** 2025-12-10
@@ -83,7 +83,7 @@ class GeminiStrategy(SiteStrategy):
     }
 ```
 
-### Session/Credential Separation (from ADR-001 discussion)
+### Session/Credential Separation (from ADR-SURF-001 discussion)
 
 ```
 Client Agent (LAS)
@@ -159,14 +159,14 @@ class AdaptiveStrategy:
 
 ## References
 
-- [ADR-001: Agentic Browser Security](./ADR-001_Agentic_Browser_Security.md) - Security controls (Phase 1 complete)
+- [ADR-SURF-001: Agentic Browser Security](./ADR-SURF-001_Agentic_Browser_Security.md) - Security controls (Phase 1 complete)
 - [Playwright Storage State](https://playwright.dev/docs/auth)
 
 ## Dependencies
 
 This ADR depends on:
-- **ADR-001 Session/Credential Separation** (implemented): navigator-mcp is stateless; client agents own credentials
-- **ADR-005 Direct Fara Execution** (complete, archived): Fara decides actions via `act()` method
+- **ADR-SURF-001 Session/Credential Separation** (implemented): navigator-mcp is stateless; client agents own credentials
+- **ADR-SURF-005 Direct Fara Execution** (complete, archived): Fara decides actions via `act()` method
 
 Current implementation provides foundation for strategies via `BrowserDriver.act(goal)` - strategies would provide site-specific guidance to improve Fara accuracy.
 
@@ -174,4 +174,4 @@ Current implementation provides foundation for strategies via `BrowserDriver.act
 
 ## Decision Outcome
 
-**Proposed** - This ADR captures architectural direction. The foundation (ADR-005 direct Fara execution) is now complete in v0.3.0. Strategy interface implementation is planned for v0.4.0.
+**Proposed** - This ADR captures architectural direction. The foundation (ADR-SURF-005 direct Fara execution) is now complete in v0.3.0. Strategy interface implementation is planned for v0.4.0.

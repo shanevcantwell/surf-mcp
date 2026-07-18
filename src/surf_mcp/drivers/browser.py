@@ -7,7 +7,7 @@ Provides:
 - Visual grounding for element location (via Fara/LLM)
 - Click, type, scroll operations using natural language descriptions
 
-Security Controls (ADR-001 Phase 1):
+Security Controls (ADR-SURF-001 Phase 1):
 - URL Allowlist/Blocklist
 - Audit Logging
 - Rate Limiting
@@ -58,7 +58,7 @@ class BrowserDriver(NavigatorDriver):
         viewport: tuple[int, int] = (1920, 1080),
         visual_grounder: Optional[VisualGrounder] = None,
         storage_state: Optional[Dict[str, Any]] = None,
-        # Security controls (ADR-001 Phase 1)
+        # Security controls (ADR-SURF-001 Phase 1)
         allowed_domains: Optional[List[str]] = None,
         blocked_domains: Optional[List[str]] = None,
         max_actions_per_minute: int = 30,
@@ -92,7 +92,7 @@ class BrowserDriver(NavigatorDriver):
         # Tracking for session summary
         self.screenshots: List[str] = []
 
-        # Security controls (ADR-001 Phase 1)
+        # Security controls (ADR-SURF-001 Phase 1)
         self._session_id = str(uuid.uuid4())[:8]
         self._audit_logger = AuditLogger(session_id=self._session_id)
         self._domain_filter = DomainFilter(
@@ -102,7 +102,7 @@ class BrowserDriver(NavigatorDriver):
         self.rate_limiter = RateLimiter(max_per_minute=max_actions_per_minute)
         self._last_screenshot_b64: Optional[str] = None
 
-        # ADR-005: Direct Fara Execution (with domain filter for visit_url security)
+        # ADR-SURF-005: Direct Fara Execution (with domain filter for visit_url security)
         self._executor = PlaywrightExecutor(domain_filter=self._domain_filter)
 
     @property
@@ -137,7 +137,7 @@ class BrowserDriver(NavigatorDriver):
                 ) from e
             raise
 
-        # Configure context with optional proxy (for Squid integration per ADR-001)
+        # Configure context with optional proxy (for Squid integration per ADR-SURF-001)
         context_options: Dict[str, Any] = {
             "viewport": {"width": self.viewport[0], "height": self.viewport[1]}
         }
@@ -179,7 +179,7 @@ class BrowserDriver(NavigatorDriver):
                 error="Browser not initialized. Call initialize() first.",
             )
 
-        # Security check: Domain filter (ADR-001 Phase 1)
+        # Security check: Domain filter (ADR-SURF-001 Phase 1)
         allowed, reason = self._domain_filter.check(location)
         if not allowed:
             self._audit_logger.log(
@@ -363,13 +363,13 @@ class BrowserDriver(NavigatorDriver):
         result = await self.grounder.locate(description, screenshot)
         return result.model_dump()
 
-    # ============ ADR-005: Direct Fara Execution ============
+    # ============ ADR-SURF-005: Direct Fara Execution ============
 
     async def act(self, goal: str) -> NavigatorState:
         """
         Execute a goal using direct Fara execution.
 
-        Per ADR-005: Fara decides what action to take, we just execute it.
+        Per ADR-SURF-005: Fara decides what action to take, we just execute it.
         This is the new unified method for all visual grounding actions.
 
         Args:
@@ -393,7 +393,7 @@ class BrowserDriver(NavigatorDriver):
                 error="Visual grounder not configured",
             )
 
-        # Security check: Rate limiting (ADR-001 Phase 1)
+        # Security check: Rate limiting (ADR-SURF-001 Phase 1)
         if not self.rate_limiter.allow():
             self._audit_logger.log(
                 action="act",
@@ -534,7 +534,7 @@ class BrowserDriver(NavigatorDriver):
         """
         Execute a goal autonomously until complete.
 
-        Per ADR-005: Runs Fara in a loop until it signals task complete
+        Per ADR-SURF-005: Runs Fara in a loop until it signals task complete
         (terminate action) or max steps reached.
 
         Args:
@@ -611,7 +611,7 @@ class BrowserDriver(NavigatorDriver):
                 error="Browser not initialized",
             )
 
-        # Security check: Rate limiting (ADR-001 Phase 1)
+        # Security check: Rate limiting (ADR-SURF-001 Phase 1)
         if not self.rate_limiter.allow():
             self._audit_logger.log(
                 action="click",
@@ -686,7 +686,7 @@ class BrowserDriver(NavigatorDriver):
                 error="Browser not initialized",
             )
 
-        # Security check: Rate limiting (ADR-001 Phase 1)
+        # Security check: Rate limiting (ADR-SURF-001 Phase 1)
         if not self.rate_limiter.allow():
             self._audit_logger.log(
                 action="type",
@@ -771,7 +771,7 @@ class BrowserDriver(NavigatorDriver):
                 error="Browser not initialized",
             )
 
-        # Security check: Rate limiting (ADR-001 Phase 1)
+        # Security check: Rate limiting (ADR-SURF-001 Phase 1)
         if not self.rate_limiter.allow():
             self._audit_logger.log(
                 action="scroll",

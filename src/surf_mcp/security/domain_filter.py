@@ -1,7 +1,7 @@
 """
 Domain Filtering for URL access control.
 
-Implements allowlist/blocklist per ADR-001 Phase 1.
+Implements allowlist/blocklist per ADR-SURF-001 Phase 1.
 """
 
 import fnmatch

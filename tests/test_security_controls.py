@@ -1,7 +1,7 @@
 """
 Security Controls Unit Tests.
 
-Unit tests for security features (ADR-001):
+Unit tests for security features (ADR-SURF-001):
 - URL Allowlist/Blocklist - domain access control
 - Audit Logging - forensic capability
 - Rate Limiting - runaway automation prevention

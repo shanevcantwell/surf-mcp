@@ -7,8 +7,8 @@ Operations specific to the browser driver (visual grounding):
 - type: Type into element by description
 - scroll: Scroll page
 - wait: Wait for element or delay
-- act: Direct Fara execution (ADR-005)
-- act_autonomous: Autonomous multi-step execution (ADR-005)
+- act: Direct Fara execution (ADR-SURF-005)
+- act_autonomous: Autonomous multi-step execution (ADR-SURF-005)
 """
 
 from typing import Any, Dict, List
@@ -151,7 +151,7 @@ def get_tools() -> List[Tool]:
                 "required": ["session_id", "driver"],
             },
         ),
-        # ADR-005: Direct Fara Execution
+        # ADR-SURF-005: Direct Fara Execution
         Tool(
             name="act",
             description="Execute a goal using direct Fara visual grounding. Fara decides what action to take (click, type, scroll, etc.) based on the goal and screenshot.",
@@ -291,7 +291,7 @@ async def wait(manager: SessionManager, args: Dict[str, Any]) -> Dict[str, Any]:
     return result.model_dump()
 
 
-# ============ ADR-005: Direct Fara Execution ============
+# ============ ADR-SURF-005: Direct Fara Execution ============
 
 
 async def act(manager: SessionManager, args: Dict[str, Any]) -> Dict[str, Any]:

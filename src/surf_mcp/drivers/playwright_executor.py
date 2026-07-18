@@ -1,7 +1,7 @@
 """
 PlaywrightExecutor - Execute Fara tool_calls directly against Playwright.
 
-Per ADR-005: This is a thin translation layer. Fara decides what action to take,
+Per ADR-SURF-005: This is a thin translation layer. Fara decides what action to take,
 we just execute it against the browser.
 
 Supported actions:

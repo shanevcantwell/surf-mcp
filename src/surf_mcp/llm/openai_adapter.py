@@ -143,7 +143,7 @@ IMPORTANT: Return ONLY the JSON object, no markdown or explanation."""
         """Verify element exists (uses locate, ignores coordinates)."""
         return await self.locate(description, screenshot_b64)
 
-    # ============ ADR-005: Direct Fara Execution ============
+    # ============ ADR-SURF-005: Direct Fara Execution ============
 
     async def get_action(
         self, goal: str, screenshot_b64: str, seed: Optional[int] = None
@@ -151,7 +151,7 @@ IMPORTANT: Return ONLY the JSON object, no markdown or explanation."""
         """
         Get action from Fara, preserving full tool_call details.
 
-        Per ADR-005: Returns FaraToolCall instead of LocateResult to preserve
+        Per ADR-SURF-005: Returns FaraToolCall instead of LocateResult to preserve
         the complete action context for direct execution.
 
         Args:
@@ -221,7 +221,7 @@ IMPORTANT: Return ONLY the tool_call tags with JSON, no other text."""
         """
         Get action from Fara, retrying with new seed if low confidence.
 
-        Per ADR-005: Uses env-configurable confidence threshold and retry count.
+        Per ADR-SURF-005: Uses env-configurable confidence threshold and retry count.
         Each retry uses a different seed to get varied model responses.
 
         Environment variables:
@@ -271,7 +271,7 @@ IMPORTANT: Return ONLY the tool_call tags with JSON, no other text."""
         """
         Parse Fara response into FaraToolCall.
 
-        Per ADR-005: Preserves full action details instead of extracting
+        Per ADR-SURF-005: Preserves full action details instead of extracting
         only coordinates like _normalize_tool_call does.
 
         Args:

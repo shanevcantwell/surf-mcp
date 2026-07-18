@@ -274,13 +274,13 @@ class SurfMCPClient:
             args["amount"] = amount
         return await self.call_tool("scroll", args)
 
-    # ==================== ADR-005: Direct Fara Execution ====================
+    # ==================== ADR-SURF-005: Direct Fara Execution ====================
 
     async def act(self, session_id: str, goal: str) -> Dict[str, Any]:
         """
         Execute goal using direct Fara execution.
 
-        Per ADR-005: Fara decides what action to take, returns full tool_call.
+        Per ADR-SURF-005: Fara decides what action to take, returns full tool_call.
 
         Returns:
             Result with fara_action, coordinate, confidence, reasoning
@@ -373,7 +373,7 @@ class SyncSurfClient:
     def scroll(self, session_id: str, direction: str = "down") -> Dict[str, Any]:
         return self._run(self._client.scroll(session_id, direction))
 
-    # ADR-005: Direct Fara Execution
+    # ADR-SURF-005: Direct Fara Execution
 
     def act(self, session_id: str, goal: str) -> Dict[str, Any]:
         return self._run(self._client.act(session_id, goal))

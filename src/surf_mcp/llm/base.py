@@ -7,7 +7,7 @@ language description instead of brittle CSS selectors.
 The LLM receives a screenshot and a description like "the blue Submit button"
 and returns coordinates (x, y) where the element is located.
 
-Per ADR-005: Fara is an agentic model that returns complete tool_calls.
+Per ADR-SURF-005: Fara is an agentic model that returns complete tool_calls.
 FaraToolCall preserves the full action, while LocateResult is deprecated
 (coordinate-only extraction).
 """
@@ -51,7 +51,7 @@ class FaraToolCall:
     """
     Represents a complete Fara tool_call, preserving all action details.
 
-    Per ADR-005: Unlike LocateResult (coordinates only), this captures Fara's
+    Per ADR-SURF-005: Unlike LocateResult (coordinates only), this captures Fara's
     full decision including the action type, enabling direct execution.
 
     Supported actions:
@@ -152,7 +152,7 @@ class VisualGrounder(ABC):
         """
         Get the action to perform based on goal and screenshot.
 
-        Per ADR-005: Fara decides what action to take, returns full tool_call.
+        Per ADR-SURF-005: Fara decides what action to take, returns full tool_call.
 
         Args:
             goal: Natural language goal (e.g., "click the search button")

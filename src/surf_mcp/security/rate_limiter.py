@@ -1,7 +1,7 @@
 """
 Rate Limiting for browser automation actions.
 
-Prevents runaway automation loops per ADR-001 Phase 1.
+Prevents runaway automation loops per ADR-SURF-001 Phase 1.
 """
 
 import time
